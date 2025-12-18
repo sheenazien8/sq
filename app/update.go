@@ -1,8 +1,12 @@
 package app
 
 import (
+	"fmt"
+
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sheenazien8/db-client-tui/logger"
+	"github.com/sheenazien8/db-client-tui/storage"
 	"github.com/sheenazien8/db-client-tui/ui/filter"
 	"github.com/sheenazien8/db-client-tui/ui/modal"
 	"github.com/sheenazien8/db-client-tui/ui/table"
@@ -39,9 +43,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ContentHeight = contentHeight
 
 		tableWidth := contentWidth - 4
-		tableHeight := contentHeight - 4
+		tableHeight := contentHeight - 2
 
 		if !m.initialized {
+			logger.Debug("Initial window size", map[string]any{
+				"width":  msg.Width,
+				"height": msg.Height,
+			})
 			m.columns, m.allRows = getTableData()
 			m.columnNames = getColumnNames(m.columns)
 			m.Main = table.New(m.columns, m.allRows)
@@ -106,9 +114,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !m.CreateConnectionModal.Visible() {
 				// Check if user submitted the form
 				if m.CreateConnectionModal.Result() == modal.ResultSubmit {
-					// TODO: Handle connection creation with:
-					// - Driver: m.CreateConnectionModal.GetDriver()
-					// - URL: m.CreateConnectionModal.GetURL()
+					name := m.CreateConnectionModal.GetName()
+					driver := m.CreateConnectionModal.GetDriver()
+					url := m.CreateConnectionModal.GetURL()
+					_, err := storage.CreateConnection(
+						name,
+						driver,
+						url,
+					)
+
+					if err != nil {
+						logger.Error(fmt.Sprintf("Failed for creating connection: %s", err), map[string]any{
+							"name":   name,
+							"driver": driver,
+							"url":    url,
+						})
+						m.Focus = FocusCreateConnectionModal
+						m.CreateConnectionModal.Show()
+						return m, tea.Batch(cmds...)
+					}
+
+					// Refresh sidebar connections list after successful creation
+					m.Sidebar.RefreshConnections()
 				}
 				m.Focus = FocusSidebar
 				m.Sidebar.SetFocused(true)
@@ -144,12 +171,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Only allow switching to main table if a database is selected
 			if m.Focus == FocusSidebar {
 				if m.Sidebar.HasActiveDatabase() {
+					logger.Debug("Focus changed", map[string]any{
+						"from": "sidebar",
+						"to":   "main",
+					})
 					m.Focus = FocusMain
 					m.Sidebar.SetFocused(false)
 					m.Main.SetFocused(true)
 				}
 				// If no database selected, stay on sidebar
 			} else {
+				logger.Debug("Focus changed", map[string]any{
+					"from": "main",
+					"to":   "sidebar",
+				})
 				m.Focus = FocusSidebar
 				m.Sidebar.SetFocused(true)
 				m.Main.SetFocused(false)
@@ -159,6 +194,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			themes := theme.GetAvailableThemes()
 			m.themeIndex = (m.themeIndex + 1) % len(themes)
 			newTheme := themes[m.themeIndex]
+			logger.Info("Theme changed", map[string]any{"theme": newTheme})
 			theme.SetTheme(theme.GetThemeByName(newTheme))
 			if m.config != nil {
 				m.config.SetTheme(newTheme)
@@ -189,8 +225,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) applyFilter() Model {
 	f := m.Filter.GetFilter()
 	if f == nil {
+		logger.Debug("Filter cleared", map[string]any{"total_rows": len(m.allRows)})
 		m.Main.SetRows(m.allRows)
 	} else {
+		logger.Debug("Filter applied", map[string]any{
+			"column":   f.Column,
+			"operator": f.Operator,
+			"value":    f.Value,
+		})
 		rows := make([][]string, len(m.allRows))
 		for i, row := range m.allRows {
 			rows[i] = []string(row)
@@ -216,7 +258,7 @@ func (m Model) updateStyles() Model {
 // updateTableSize adjusts table size based on filter visibility
 func (m Model) updateTableSize() Model {
 	tableWidth := m.ContentWidth - 4
-	contentHeight := m.ContentHeight - 2
+	contentHeight := m.ContentHeight
 
 	filterBarHeight := 0
 	if m.Filter.Visible() {

@@ -2,10 +2,12 @@ package storage
 
 import (
 	"database/sql"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
+	"github.com/sheenazien8/db-client-tui/drivers"
 	_ "modernc.org/sqlite"
 )
 
@@ -131,10 +133,26 @@ func createTables() error {
 // =============================================================================
 
 // CreateConnection creates a new connection and returns its ID
-func CreateConnection(name, driver, url string) (int64, error) {
+// It tests the connection before saving to ensure it's valid
+func CreateConnection(name, driverName, url string) (int64, error) {
+	// Test connection before saving
+	var driver drivers.Driver
+
+	switch driverName {
+	case drivers.DriverMySQL:
+		driver = &drivers.MySQL{}
+	default:
+		return 0, fmt.Errorf("unsupported driver: %s", driverName)
+	}
+
+	if err := driver.TestConnection(url); err != nil {
+		return 0, fmt.Errorf("connection test failed: %w", err)
+	}
+
+	// Connection is valid, save to database
 	result, err := DB.Exec(
 		"INSERT INTO connections (name, driver, url) VALUES (?, ?, ?)",
-		name, driver, url,
+		name, driverName, url,
 	)
 	if err != nil {
 		return 0, err
@@ -343,4 +361,45 @@ func ClearQueryHistory(connectionID int64) error {
 func ClearAllQueryHistory() error {
 	_, err := DB.Exec("DELETE FROM query_history")
 	return err
+}
+
+// =============================================================================
+// Database Connection operations
+// =============================================================================
+
+// Connect establishes a connection to an external database using the saved connection info
+func Connect(conn *Connection) (drivers.Driver, error) {
+	var driver drivers.Driver
+
+	switch conn.Driver {
+	case drivers.DriverMySQL:
+		driver = &drivers.MySQL{}
+	default:
+		return nil, fmt.Errorf("unsupported driver: %s", conn.Driver)
+	}
+
+	if err := driver.Connect(conn.URL); err != nil {
+		return nil, fmt.Errorf("failed to connect: %w", err)
+	}
+
+	return driver, nil
+}
+
+// TestConnectionByID tests a connection by ID without keeping it open
+func TestConnectionByID(id int64) error {
+	conn, err := GetConnection(id)
+	if err != nil {
+		return fmt.Errorf("connection not found: %w", err)
+	}
+
+	var driver drivers.Driver
+
+	switch conn.Driver {
+	case drivers.DriverMySQL:
+		driver = &drivers.MySQL{}
+	default:
+		return fmt.Errorf("unsupported driver: %s", conn.Driver)
+	}
+
+	return driver.TestConnection(conn.URL)
 }

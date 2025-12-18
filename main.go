@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -16,8 +17,12 @@ func main() {
 		fmt.Println("Failed to setup logger:", err)
 		os.Exit(1)
 	}
+	logger.SetLevel(slog.LevelDebug)
+	logger.Info("Application started", nil)
+
 	// Initialize app storage (SQLite database)
 	if err := storage.Init(); err != nil {
+		logger.Error("Failed to initialize storage", map[string]any{"error": err.Error()})
 		fmt.Println("Failed to initialize storage:", err)
 		os.Exit(1)
 	}

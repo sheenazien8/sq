@@ -5,6 +5,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sheenazien8/db-client-tui/logger"
 	"github.com/sheenazien8/db-client-tui/storage"
 	"github.com/sheenazien8/db-client-tui/ui/theme"
 )
@@ -47,16 +48,24 @@ func New() Model {
 func getConnections() (data []Connection) {
 	connections, err := storage.GetAllConnections()
 	if err != nil {
-		for _, connection := range connections {
-			data = append(data, Connection{
-				Name: connection.Name,
-				Type: connection.Driver,
-				Host: connection.URL,
-			})
-		}
-
+		logger.Debug("Error getting connections", map[string]any{
+			"error": err.Error(),
+		})
 		return data
 	}
+
+	logger.Debug("Getting connections", map[string]any{
+		"data": len(connections),
+	})
+
+	for _, connection := range connections {
+		data = append(data, Connection{
+			Name: connection.Name,
+			Type: connection.Driver,
+			Host: connection.URL,
+		})
+	}
+
 	return data
 }
 
@@ -109,6 +118,14 @@ func (m *Model) SetDatabases(databases []Connection) {
 	m.databases = databases
 	if m.cursor >= len(databases) {
 		m.cursor = max(0, len(databases)-1)
+	}
+}
+
+// RefreshConnections reloads the connections from storage
+func (m *Model) RefreshConnections() {
+	m.databases = getConnections()
+	if m.cursor >= len(m.databases) {
+		m.cursor = max(0, len(m.databases)-1)
 	}
 }
 

@@ -52,7 +52,7 @@ func (m Model) View() string {
 			Width(m.ContentWidth).
 			Height(contentHeight)
 
-		placeholder := placeholderStyle.Render("Select a database from the sidebar\n(Press Enter to select)")
+		placeholder := placeholderStyle.Render("Select a connection from the sidebar\n(Press Enter to select)")
 
 		mainArea = tableBorderStyle.
 			Width(m.ContentWidth).

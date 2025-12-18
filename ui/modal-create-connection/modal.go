@@ -4,6 +4,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sheenazien8/db-client-tui/logger"
 	"github.com/sheenazien8/db-client-tui/ui/modal"
 	"github.com/sheenazien8/db-client-tui/ui/theme"
 )
@@ -11,7 +12,8 @@ import (
 type FocusField int
 
 const (
-	FocusDriverInput FocusField = iota
+	FocusNameInput FocusField = iota
+	FocusDriverInput
 	FocusUrlInput
 	FocusSubmitButton
 	FocusCancelButton
@@ -22,6 +24,7 @@ type Content struct {
 	drivers     []string
 	driverIndex int
 	urlInput    textinput.Model
+	nameInput   textinput.Model
 
 	focusField FocusField
 
@@ -32,16 +35,24 @@ type Content struct {
 
 // NewContent creates a new create connection content
 func NewContent() *Content {
-	ti := textinput.New()
-	ti.Placeholder = "mysql://user:password@localhost:3306/dbname"
-	ti.CharLimit = 256
-	ti.Width = 50
+	nameInput := textinput.New()
+	nameInput.Placeholder = "Your connection name"
+	nameInput.CharLimit = 256
+	nameInput.Width = 50
+
+	urlInput := textinput.New()
+	urlInput.Placeholder = "mysql://user:password@localhost:3306/dbname"
+	urlInput.CharLimit = 256
+	urlInput.Width = 50
+
+	nameInput.Focus() // Focus name input by default
 
 	return &Content{
-		drivers:     []string{"mysql", "postgres", "sqlite"},
+		drivers:     []string{"mysql"},
 		driverIndex: 0,
-		urlInput:    ti,
-		focusField:  FocusDriverInput,
+		urlInput:    urlInput,
+		nameInput:   nameInput,
+		focusField:  FocusNameInput,
 		result:      modal.ResultNone,
 		closed:      false,
 	}
@@ -52,20 +63,71 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
+		// Handle text input first when focused on URL field
+		// This allows typing h, l, j, k etc. in the text input
+		if c.focusField == FocusUrlInput {
+			switch msg.String() {
+			case "esc":
+				logger.Debug("Create connection cancelled", nil)
+				c.result = modal.ResultCancel
+				c.closed = true
+				return c, nil
+			case "tab", "down":
+				// Allow navigation out of text input
+				c.focusField = (c.focusField + 1) % 5
+				c.updateFocus()
+				return c, nil
+			case "shift+tab", "up":
+				// Allow navigation out of text input
+				c.focusField = (c.focusField - 1 + 5) % 5
+				c.updateFocus()
+				return c, nil
+			default:
+				// Pass all other keys to text input
+				c.urlInput, cmd = c.urlInput.Update(msg)
+				return c, cmd
+			}
+		}
+
+		if c.focusField == FocusNameInput {
+			switch msg.String() {
+			case "esc":
+				logger.Debug("Create connection cancelled", nil)
+				c.result = modal.ResultCancel
+				c.closed = true
+				return c, nil
+			case "tab", "down":
+				// Allow navigation out of text input
+				c.focusField = (c.focusField + 1) % 5
+				c.updateFocus()
+				return c, nil
+			case "shift+tab", "up":
+				// Allow navigation out of text input
+				c.focusField = (c.focusField - 1 + 5) % 5
+				c.updateFocus()
+				return c, nil
+			default:
+				// Pass all other keys to text input
+				c.nameInput, cmd = c.nameInput.Update(msg)
+				return c, cmd
+			}
+		}
+
 		switch msg.String() {
 		case "esc":
+			logger.Debug("Create connection cancelled", nil)
 			c.result = modal.ResultCancel
 			c.closed = true
 			return c, nil
 
 		case "tab", "down", "j":
 			// Cycle forward through fields
-			c.focusField = (c.focusField + 1) % 4
+			c.focusField = (c.focusField + 1) % 5
 			c.updateFocus()
 
 		case "shift+tab", "up", "k":
 			// Cycle backward through fields
-			c.focusField = (c.focusField - 1 + 4) % 4
+			c.focusField = (c.focusField - 1 + 5) % 5
 			c.updateFocus()
 
 		case "left", "h":
@@ -88,18 +150,17 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 
 		case "enter":
 			if c.focusField == FocusSubmitButton {
+				logger.Info("Connection submitted", map[string]any{
+					"driver": c.drivers[c.driverIndex],
+					"url":    c.urlInput.Value(),
+					"name":   c.nameInput.Value(),
+				})
 				c.result = modal.ResultSubmit
 				c.closed = true
 			} else if c.focusField == FocusCancelButton {
+				logger.Debug("Create connection cancelled", nil)
 				c.result = modal.ResultCancel
 				c.closed = true
-			}
-
-		default:
-			// Handle text input when focused on URL field
-			if c.focusField == FocusUrlInput {
-				c.urlInput, cmd = c.urlInput.Update(msg)
-				return c, cmd
 			}
 		}
 	}
@@ -108,6 +169,14 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 }
 
 func (c *Content) updateFocus() {
+	// Handle name input focus
+	if c.focusField == FocusNameInput {
+		c.nameInput.Focus()
+	} else {
+		c.nameInput.Blur()
+	}
+
+	// Handle URL input focus
 	if c.focusField == FocusUrlInput {
 		c.urlInput.Focus()
 	} else {
@@ -142,6 +211,18 @@ func (c *Content) View() string {
 		Foreground(t.Colors.ForegroundDim).
 		Background(t.Colors.SelectionBg).
 		Padding(0, 2)
+
+	nameLabel := labelStyle.Render("Name:")
+	var nameDisplay string
+	if c.focusField == FocusNameInput {
+		c.nameInput.TextStyle = lipgloss.NewStyle().Foreground(t.Colors.Foreground)
+		c.nameInput.PromptStyle = lipgloss.NewStyle().Foreground(t.Colors.Primary)
+	} else {
+		c.nameInput.TextStyle = lipgloss.NewStyle().Foreground(t.Colors.ForegroundDim)
+		c.nameInput.PromptStyle = lipgloss.NewStyle().Foreground(t.Colors.ForegroundDim)
+	}
+	nameDisplay = c.nameInput.View()
+	nameRow := lipgloss.JoinHorizontal(lipgloss.Center, nameLabel, nameDisplay)
 
 	// Driver selector
 	var driverDisplay string
@@ -195,6 +276,8 @@ func (c *Content) View() string {
 
 	return contentStyle.Render(lipgloss.JoinVertical(
 		lipgloss.Left,
+		nameRow,
+		"",
 		driverRow,
 		"",
 		urlRow,
@@ -229,13 +312,19 @@ func (c *Content) GetURL() string {
 	return c.urlInput.Value()
 }
 
+func (c *Content) GetName() string {
+	return c.nameInput.Value()
+}
+
 // Reset resets the content to initial state
 func (c *Content) Reset() {
 	c.driverIndex = 0
+	c.nameInput.SetValue("")
 	c.urlInput.SetValue("")
-	c.focusField = FocusDriverInput
+	c.focusField = FocusNameInput
 	c.result = modal.ResultNone
 	c.closed = false
+	c.nameInput.Focus()
 	c.urlInput.Blur()
 }
 
@@ -257,6 +346,7 @@ func New() Model {
 
 // Show displays the modal
 func (m *Model) Show() {
+	logger.Debug("Create connection modal opened", nil)
 	m.content.Reset()
 	m.modal.Show()
 }
@@ -301,4 +391,9 @@ func (m Model) GetDriver() string {
 // GetURL returns the entered URL
 func (m Model) GetURL() string {
 	return m.content.GetURL()
+}
+
+// GetURL returns the entered URL
+func (m Model) GetName() string {
+	return m.content.GetName()
 }

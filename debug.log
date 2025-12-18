@@ -1,0 +1,249 @@
+{"timestamp":"2025-12-18T18:49:29+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T18:49:29+07:00","level":"DEBUG","message":"Window resized","additional_info":{"height":43,"width":148}}
+{"timestamp":"2025-12-18T18:49:38+07:00","level":"DEBUG","message":"Window resized","additional_info":{"height":43,"width":143}}
+{"timestamp":"2025-12-18T18:49:38+07:00","level":"DEBUG","message":"Window resized","additional_info":{"height":43,"width":138}}
+{"timestamp":"2025-12-18T18:49:38+07:00","level":"DEBUG","message":"Window resized","additional_info":{"height":43,"width":133}}
+{"timestamp":"2025-12-18T18:49:39+07:00","level":"DEBUG","message":"Window resized","additional_info":{"height":43,"width":128}}
+{"timestamp":"2025-12-18T18:49:39+07:00","level":"DEBUG","message":"Window resized","additional_info":{"height":43,"width":123}}
+{"timestamp":"2025-12-18T18:49:42+07:00","level":"DEBUG","message":"Window resized","additional_info":{"height":43,"width":128}}
+{"timestamp":"2025-12-18T18:49:42+07:00","level":"DEBUG","message":"Window resized","additional_info":{"height":43,"width":133}}
+{"timestamp":"2025-12-18T18:49:42+07:00","level":"DEBUG","message":"Window resized","additional_info":{"height":43,"width":138}}
+{"timestamp":"2025-12-18T18:49:43+07:00","level":"DEBUG","message":"Window resized","additional_info":{"height":43,"width":143}}
+{"timestamp":"2025-12-18T18:49:43+07:00","level":"DEBUG","message":"Window resized","additional_info":{"height":43,"width":153}}
+{"timestamp":"2025-12-18T18:49:43+07:00","level":"DEBUG","message":"Window resized","additional_info":{"height":43,"width":163}}
+{"timestamp":"2025-12-18T18:50:08+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T18:50:08+07:00","level":"DEBUG","message":"Window resized","additional_info":{"height":43,"width":163}}
+{"timestamp":"2025-12-18T18:50:15+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T18:50:15+07:00","level":"DEBUG","message":"Window resized","additional_info":{"height":43,"width":163}}
+{"timestamp":"2025-12-18T18:52:27+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T18:52:27+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":163}}
+{"timestamp":"2025-12-18T18:56:09+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T18:56:09+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":158}}
+{"timestamp":"2025-12-18T18:56:59+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T18:56:59+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":158}}
+{"timestamp":"2025-12-18T18:57:00+07:00","level":"INFO","message":"Theme changed","additional_info":{"theme":"tokyo-night"}}
+{"timestamp":"2025-12-18T18:57:00+07:00","level":"INFO","message":"Theme changed","additional_info":{"theme":"catppuccin"}}
+{"timestamp":"2025-12-18T18:57:01+07:00","level":"INFO","message":"Theme changed","additional_info":{"theme":"monokai"}}
+{"timestamp":"2025-12-18T18:57:01+07:00","level":"INFO","message":"Theme changed","additional_info":{"theme":"default"}}
+{"timestamp":"2025-12-18T18:57:02+07:00","level":"INFO","message":"Theme changed","additional_info":{"theme":"dracula"}}
+{"timestamp":"2025-12-18T18:57:02+07:00","level":"INFO","message":"Theme changed","additional_info":{"theme":"nord"}}
+{"timestamp":"2025-12-18T18:57:02+07:00","level":"INFO","message":"Theme changed","additional_info":{"theme":"gruvbox"}}
+{"timestamp":"2025-12-18T18:57:54+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T18:57:54+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":158}}
+{"timestamp":"2025-12-18T18:59:10+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T18:59:10+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":158}}
+{"timestamp":"2025-12-18T18:59:11+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:00:03+07:00","level":"INFO","message":"Connection submitted","additional_info":{"driver":"mysql","url":"mysq"}}
+{"timestamp":"2025-12-18T19:00:06+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T19:00:07+07:00","level":"INFO","message":"User confirmed exit"}
+{"timestamp":"2025-12-18T19:01:29+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T19:01:29+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":158}}
+{"timestamp":"2025-12-18T19:01:30+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:02:16+07:00","level":"INFO","message":"Connection submitted","additional_info":{"driver":"mysql","url":"mysql://root:password@localhost:3306/galaplate"}}
+{"timestamp":"2025-12-18T19:04:20+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:04:21+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T19:08:14+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:08:15+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T19:08:17+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:08:18+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T19:09:23+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:10:57+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T19:10:58+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T19:10:59+07:00","level":"INFO","message":"User confirmed exit"}
+{"timestamp":"2025-12-18T19:11:01+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T19:11:01+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":158}}
+{"timestamp":"2025-12-18T19:11:02+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:11:09+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T19:11:10+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T19:11:11+07:00","level":"INFO","message":"User confirmed exit"}
+{"timestamp":"2025-12-18T19:11:56+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T19:11:56+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":158}}
+{"timestamp":"2025-12-18T19:11:57+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:12:08+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T19:12:08+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T19:12:09+07:00","level":"INFO","message":"User confirmed exit"}
+{"timestamp":"2025-12-18T19:13:48+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T19:13:48+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":158}}
+{"timestamp":"2025-12-18T19:13:49+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:13:53+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T19:13:54+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:13:58+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T19:14:00+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:14:53+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T19:14:53+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T19:14:54+07:00","level":"INFO","message":"User confirmed exit"}
+{"timestamp":"2025-12-18T19:14:56+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T19:14:56+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":158}}
+{"timestamp":"2025-12-18T19:14:56+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:15:26+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T19:15:55+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T19:15:56+07:00","level":"INFO","message":"User confirmed exit"}
+{"timestamp":"2025-12-18T19:15:57+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T19:15:57+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":158}}
+{"timestamp":"2025-12-18T19:15:57+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:16:53+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T19:16:54+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T19:16:54+07:00","level":"DEBUG","message":"User cancelled exit"}
+{"timestamp":"2025-12-18T19:18:37+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T19:18:38+07:00","level":"INFO","message":"User confirmed exit"}
+{"timestamp":"2025-12-18T19:18:39+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T19:18:39+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":158}}
+{"timestamp":"2025-12-18T19:18:39+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:21:22+07:00","level":"INFO","message":"Connection submitted","additional_info":{"driver":"mysql","url":"mysql://root:password@localhost:3306/bpkb"}}
+{"timestamp":"2025-12-18T19:21:25+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:21:26+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T19:21:27+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T19:21:27+07:00","level":"INFO","message":"User confirmed exit"}
+{"timestamp":"2025-12-18T19:21:28+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T19:21:28+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":158}}
+{"timestamp":"2025-12-18T19:21:31+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T19:21:31+07:00","level":"DEBUG","message":"User cancelled exit"}
+{"timestamp":"2025-12-18T19:21:32+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T19:21:33+07:00","level":"DEBUG","message":"User cancelled exit"}
+{"timestamp":"2025-12-18T19:21:34+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T19:21:34+07:00","level":"DEBUG","message":"User cancelled exit"}
+{"timestamp":"2025-12-18T19:21:35+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T19:21:35+07:00","level":"INFO","message":"User confirmed exit"}
+{"timestamp":"2025-12-18T19:28:24+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T19:28:24+07:00","level":"DEBUG","message":"Getting connections","additional_info":{"data":1}}
+{"timestamp":"2025-12-18T19:28:24+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":158}}
+{"timestamp":"2025-12-18T19:29:15+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T19:29:16+07:00","level":"INFO","message":"User confirmed exit"}
+{"timestamp":"2025-12-18T19:29:17+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T19:29:17+07:00","level":"DEBUG","message":"Getting connections","additional_info":{"data":2}}
+{"timestamp":"2025-12-18T19:29:17+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":158}}
+{"timestamp":"2025-12-18T19:29:47+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T19:29:48+07:00","level":"INFO","message":"User confirmed exit"}
+{"timestamp":"2025-12-18T19:40:39+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T19:40:39+07:00","level":"DEBUG","message":"Getting connections","additional_info":{"data":2}}
+{"timestamp":"2025-12-18T19:40:39+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":158}}
+{"timestamp":"2025-12-18T19:40:42+07:00","level":"DEBUG","message":"Focus changed","additional_info":{"from":"sidebar","to":"main"}}
+{"timestamp":"2025-12-18T19:40:47+07:00","level":"DEBUG","message":"Focus changed","additional_info":{"from":"main","to":"sidebar"}}
+{"timestamp":"2025-12-18T19:40:49+07:00","level":"DEBUG","message":"Focus changed","additional_info":{"from":"sidebar","to":"main"}}
+{"timestamp":"2025-12-18T19:40:51+07:00","level":"DEBUG","message":"Focus changed","additional_info":{"from":"main","to":"sidebar"}}
+{"timestamp":"2025-12-18T19:40:53+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T19:40:54+07:00","level":"INFO","message":"User confirmed exit"}
+{"timestamp":"2025-12-18T19:41:02+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T19:41:02+07:00","level":"DEBUG","message":"Getting connections","additional_info":{"data":2}}
+{"timestamp":"2025-12-18T19:41:02+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":158}}
+{"timestamp":"2025-12-18T19:41:21+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T19:41:22+07:00","level":"INFO","message":"User confirmed exit"}
+{"timestamp":"2025-12-18T19:41:49+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T19:41:49+07:00","level":"DEBUG","message":"Getting connections","additional_info":{"data":0}}
+{"timestamp":"2025-12-18T19:41:49+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":158}}
+{"timestamp":"2025-12-18T19:41:51+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T19:41:52+07:00","level":"INFO","message":"User confirmed exit"}
+{"timestamp":"2025-12-18T19:52:59+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T19:52:59+07:00","level":"DEBUG","message":"Getting connections","additional_info":{"data":0}}
+{"timestamp":"2025-12-18T19:52:59+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":158}}
+{"timestamp":"2025-12-18T19:53:00+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:53:18+07:00","level":"INFO","message":"Connection submitted","additional_info":{"driver":"mysql","name":"bpkb","url":"mysql://root:password@localhost:3306/bpkp"}}
+{"timestamp":"2025-12-18T19:54:35+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T19:54:36+07:00","level":"INFO","message":"User confirmed exit"}
+{"timestamp":"2025-12-18T19:54:37+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T19:54:37+07:00","level":"DEBUG","message":"Getting connections","additional_info":{"data":0}}
+{"timestamp":"2025-12-18T19:54:37+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":158}}
+{"timestamp":"2025-12-18T19:54:38+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:54:57+07:00","level":"INFO","message":"Connection submitted","additional_info":{"driver":"mysql","name":"bpkb","url":"mysql://root:password@localhost:3306/bpkp"}}
+{"timestamp":"2025-12-18T19:56:59+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:57:01+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T19:57:01+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T19:57:02+07:00","level":"INFO","message":"User confirmed exit"}
+{"timestamp":"2025-12-18T19:57:24+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T19:57:24+07:00","level":"DEBUG","message":"Getting connections","additional_info":{"data":0}}
+{"timestamp":"2025-12-18T19:57:24+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":158}}
+{"timestamp":"2025-12-18T19:57:24+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:57:25+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T19:58:28+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T19:58:28+07:00","level":"DEBUG","message":"Getting connections","additional_info":{"data":0}}
+{"timestamp":"2025-12-18T19:58:28+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":118}}
+{"timestamp":"2025-12-18T19:58:38+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T19:58:39+07:00","level":"INFO","message":"User confirmed exit"}
+{"timestamp":"2025-12-18T19:58:40+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T19:58:40+07:00","level":"DEBUG","message":"Getting connections","additional_info":{"data":0}}
+{"timestamp":"2025-12-18T19:58:40+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":163}}
+{"timestamp":"2025-12-18T19:58:40+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:58:41+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T19:58:41+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:58:42+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T19:58:42+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:59:10+07:00","level":"INFO","message":"Connection submitted","additional_info":{"driver":"mysql","name":"bpkp","url":"mysql://root:password@localhost:3306/bpkp"}}
+{"timestamp":"2025-12-18T19:59:10+07:00","level":"ERROR","message":"Failed for creating connection","additional_info":{"driver":"mysql","name":"bpkp","url":"mysql://root:password@localhost:3306/bpkp"}}
+{"timestamp":"2025-12-18T19:59:26+07:00","level":"DEBUG","message":"Focus changed","additional_info":{"from":"main","to":"sidebar"}}
+{"timestamp":"2025-12-18T19:59:29+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T19:59:30+07:00","level":"DEBUG","message":"User cancelled exit"}
+{"timestamp":"2025-12-18T19:59:31+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T19:59:31+07:00","level":"DEBUG","message":"User cancelled exit"}
+{"timestamp":"2025-12-18T19:59:32+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:59:35+07:00","level":"INFO","message":"Connection submitted","additional_info":{"driver":"mysql","name":"","url":""}}
+{"timestamp":"2025-12-18T19:59:35+07:00","level":"ERROR","message":"Failed for creating connection","additional_info":{"driver":"mysql","name":"","url":""}}
+{"timestamp":"2025-12-18T19:59:39+07:00","level":"DEBUG","message":"Focus changed","additional_info":{"from":"main","to":"sidebar"}}
+{"timestamp":"2025-12-18T19:59:40+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:59:41+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T19:59:55+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:59:55+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T19:59:56+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T19:59:57+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T19:59:57+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T19:59:58+07:00","level":"DEBUG","message":"User cancelled exit"}
+{"timestamp":"2025-12-18T20:00:25+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T20:00:26+07:00","level":"INFO","message":"User confirmed exit"}
+{"timestamp":"2025-12-18T20:00:27+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T20:00:27+07:00","level":"DEBUG","message":"Getting connections","additional_info":{"data":0}}
+{"timestamp":"2025-12-18T20:00:27+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":163}}
+{"timestamp":"2025-12-18T20:00:28+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T20:00:33+07:00","level":"INFO","message":"Connection submitted","additional_info":{"driver":"mysql","name":"bpkb","url":"mysq"}}
+{"timestamp":"2025-12-18T20:00:33+07:00","level":"ERROR","message":"Failed for creating connection","additional_info":{"driver":"mysql","name":"bpkb","url":"mysq"}}
+{"timestamp":"2025-12-18T20:00:33+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T20:00:38+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T20:00:39+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T20:00:40+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T20:00:43+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T20:01:03+07:00","level":"INFO","message":"Connection submitted","additional_info":{"driver":"mysql","name":"bpkb","url":"mysql://root:password@localhost:3306/bpkb"}}
+{"timestamp":"2025-12-18T20:01:03+07:00","level":"ERROR","message":"Failed for creating connection","additional_info":{"driver":"mysql","name":"bpkb","url":"mysql://root:password@localhost:3306/bpkb"}}
+{"timestamp":"2025-12-18T20:01:03+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T20:02:08+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T20:02:08+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T20:02:09+07:00","level":"INFO","message":"User confirmed exit"}
+{"timestamp":"2025-12-18T20:02:11+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T20:02:11+07:00","level":"DEBUG","message":"Getting connections","additional_info":{"data":0}}
+{"timestamp":"2025-12-18T20:02:11+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":163}}
+{"timestamp":"2025-12-18T20:02:12+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T20:02:16+07:00","level":"INFO","message":"Connection submitted","additional_info":{"driver":"mysql","name":"bpkb","url":"mysql://root:password@localhost:3306/bpkb"}}
+{"timestamp":"2025-12-18T20:02:16+07:00","level":"ERROR","message":"Failed for creating connection: connection test failed: sql: unknown driver \"mysql\" (forgotten import?)","additional_info":{"driver":"mysql","name":"bpkb","url":"mysql://root:password@localhost:3306/bpkb"}}
+{"timestamp":"2025-12-18T20:02:16+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T20:02:55+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T20:02:56+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T20:02:57+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T20:02:58+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T20:02:59+07:00","level":"INFO","message":"User confirmed exit"}
+{"timestamp":"2025-12-18T20:03:02+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T20:03:02+07:00","level":"DEBUG","message":"Getting connections","additional_info":{"data":0}}
+{"timestamp":"2025-12-18T20:03:02+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":163}}
+{"timestamp":"2025-12-18T20:03:04+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T20:03:25+07:00","level":"INFO","message":"Connection submitted","additional_info":{"driver":"mysql","name":"bpkb","url":"mysql://root:password@localhost:3306/bpkb"}}
+{"timestamp":"2025-12-18T20:03:29+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T20:03:30+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T20:03:31+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T20:03:31+07:00","level":"DEBUG","message":"Create connection cancelled"}
+{"timestamp":"2025-12-18T20:03:32+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T20:03:32+07:00","level":"INFO","message":"User confirmed exit"}
+{"timestamp":"2025-12-18T20:03:33+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T20:03:33+07:00","level":"DEBUG","message":"Getting connections","additional_info":{"data":1}}
+{"timestamp":"2025-12-18T20:03:33+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":163}}
+{"timestamp":"2025-12-18T20:03:36+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T20:03:36+07:00","level":"INFO","message":"User confirmed exit"}
+{"timestamp":"2025-12-18T21:01:04+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T21:01:04+07:00","level":"DEBUG","message":"Getting connections","additional_info":{"data":1}}
+{"timestamp":"2025-12-18T21:01:04+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":163}}
+{"timestamp":"2025-12-18T21:01:31+07:00","level":"DEBUG","message":"Create connection modal opened"}
+{"timestamp":"2025-12-18T21:01:52+07:00","level":"INFO","message":"Connection submitted","additional_info":{"driver":"mysql","name":"test","url":"mysql://root:password@localhost:3306/axis"}}
+{"timestamp":"2025-12-18T21:01:52+07:00","level":"DEBUG","message":"Getting connections","additional_info":{"data":2}}
+{"timestamp":"2025-12-18T21:02:10+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T21:02:11+07:00","level":"INFO","message":"User confirmed exit"}
+{"timestamp":"2025-12-18T21:02:12+07:00","level":"INFO","message":"Application started"}
+{"timestamp":"2025-12-18T21:02:12+07:00","level":"DEBUG","message":"Getting connections","additional_info":{"data":2}}
+{"timestamp":"2025-12-18T21:02:12+07:00","level":"DEBUG","message":"Initial window size","additional_info":{"height":43,"width":163}}
+{"timestamp":"2025-12-18T21:02:16+07:00","level":"DEBUG","message":"Focus changed","additional_info":{"from":"sidebar","to":"main"}}
+{"timestamp":"2025-12-18T21:02:21+07:00","level":"DEBUG","message":"Exit modal opened"}
+{"timestamp":"2025-12-18T21:02:22+07:00","level":"INFO","message":"User confirmed exit"}

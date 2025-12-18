@@ -2,6 +2,7 @@ package modalexit
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/sheenazien8/db-client-tui/logger"
 	"github.com/sheenazien8/db-client-tui/ui/modal"
 )
 
@@ -23,6 +24,7 @@ func New() Model {
 
 // Show displays the modal
 func (m *Model) Show() {
+	logger.Debug("Exit modal opened", nil)
 	m.content.Reset()
 	m.modal.Show()
 }
@@ -61,5 +63,11 @@ func (m Model) Result() modal.Result {
 
 // Confirmed returns true if the user confirmed exit
 func (m Model) Confirmed() bool {
-	return m.modal.Result() == modal.ResultYes
+	confirmed := m.modal.Result() == modal.ResultYes
+	if confirmed {
+		logger.Info("User confirmed exit", nil)
+	} else {
+		logger.Debug("User cancelled exit", nil)
+	}
+	return confirmed
 }
