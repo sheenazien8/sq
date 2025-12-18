@@ -6,15 +6,22 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/sheenazien8/db-client-tui/app"
+	"github.com/sheenazien8/db-client-tui/logger"
+	"github.com/sheenazien8/db-client-tui/storage"
 )
 
 func main() {
-	f, err := tea.LogToFile("debug.log", "debug")
-	if err != nil {
-		fmt.Println(err)
+	// Setup logger
+	if err := logger.SetFile("debug.log"); err != nil {
+		fmt.Println("Failed to setup logger:", err)
 		os.Exit(1)
 	}
-	defer f.Close()
+	// Initialize app storage (SQLite database)
+	if err := storage.Init(); err != nil {
+		fmt.Println("Failed to initialize storage:", err)
+		os.Exit(1)
+	}
+	defer storage.Close()
 
 	p := tea.NewProgram(
 		app.New(),

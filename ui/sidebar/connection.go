@@ -5,22 +5,30 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sheenazien8/db-client-tui/storage"
 	"github.com/sheenazien8/db-client-tui/ui/theme"
 )
 
-// Database represents a database item in the sidebar
-type Database struct {
+type Table struct {
+	Name     string
+	RowCount int64
+	Selected bool
+}
+
+// Connection represents a database item in the sidebar
+type Connection struct {
 	Name     string
 	Type     string // mysql, postgres, sqlite, etc.
 	Host     string
 	Selected bool
+	Tables   []Table
 }
 
 // Model represents the sidebar with database list
 type Model struct {
-	databases []Database
+	databases []Connection
 	cursor    int
-	offset    int // scroll offset
+	offset    int
 	width     int
 	height    int
 	focused   bool
@@ -29,22 +37,27 @@ type Model struct {
 // New creates a new sidebar model with sample databases
 func New() Model {
 	return Model{
-		databases: []Database{
-			{Name: "production_db", Type: "mysql", Host: "localhost:3306"},
-			{Name: "staging_db", Type: "mysql", Host: "localhost:3306"},
-			{Name: "analytics", Type: "postgres", Host: "localhost:5432"},
-			{Name: "user_data", Type: "postgres", Host: "localhost:5432"},
-			{Name: "cache_db", Type: "redis", Host: "localhost:6379"},
-			{Name: "local_dev", Type: "sqlite", Host: "local"},
-			{Name: "test_db", Type: "mysql", Host: "localhost:3306"},
-			{Name: "logs_db", Type: "postgres", Host: "localhost:5432"},
-			{Name: "session_store", Type: "redis", Host: "localhost:6379"},
-			{Name: "backup_db", Type: "sqlite", Host: "local"},
-		},
-		cursor:  0,
-		offset:  0,
-		focused: false,
+		databases: getConnections(),
+		cursor:    0,
+		offset:    0,
+		focused:   false,
 	}
+}
+
+func getConnections() (data []Connection) {
+	connections, err := storage.GetAllConnections()
+	if err != nil {
+		for _, connection := range connections {
+			data = append(data, Connection{
+				Name: connection.Name,
+				Type: connection.Driver,
+				Host: connection.URL,
+			})
+		}
+
+		return data
+	}
+	return data
 }
 
 // SetSize sets the sidebar dimensions
@@ -69,7 +82,7 @@ func (m Model) Cursor() int {
 }
 
 // SelectedDatabase returns the currently selected database (cursor position)
-func (m Model) SelectedDatabase() *Database {
+func (m Model) SelectedDatabase() *Connection {
 	if m.cursor >= 0 && m.cursor < len(m.databases) {
 		return &m.databases[m.cursor]
 	}
@@ -77,7 +90,7 @@ func (m Model) SelectedDatabase() *Database {
 }
 
 // ActiveDatabase returns the database that has been activated (via Enter key)
-func (m Model) ActiveDatabase() *Database {
+func (m Model) ActiveDatabase() *Connection {
 	for i := range m.databases {
 		if m.databases[i].Selected {
 			return &m.databases[i]
@@ -92,7 +105,7 @@ func (m Model) HasActiveDatabase() bool {
 }
 
 // SetDatabases updates the database list
-func (m *Model) SetDatabases(databases []Database) {
+func (m *Model) SetDatabases(databases []Connection) {
 	m.databases = databases
 	if m.cursor >= len(databases) {
 		m.cursor = max(0, len(databases)-1)
@@ -102,7 +115,7 @@ func (m *Model) SetDatabases(databases []Database) {
 // visibleItems returns the number of items that can be displayed
 func (m Model) visibleItems() int {
 	// Account for title (1 line), separator (1 line), status (1 line), borders (2 lines)
-	return max(0, m.height-7)
+	return max(0, m.height-5)
 }
 
 // Init initializes the model
@@ -169,7 +182,7 @@ func (m Model) View() string {
 	var lines []string
 
 	// Title
-	title := t.SidebarTitle.Width(innerWidth).Render(" Databases")
+	title := t.SidebarTitle.Width(innerWidth).Render(" Connection name")
 	lines = append(lines, title)
 
 	// Separator
