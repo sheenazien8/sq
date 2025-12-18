@@ -58,6 +58,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Sidebar.SetSize(m.SidebarWidth, contentHeight)
 
 		m.ExitModal.SetSize(m.TerminalWidth, m.TerminalHeight)
+		m.CreateConnectionModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 
 	case tea.KeyMsg:
 		if m.ExitModal.Visible() {
@@ -66,8 +67,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Check modal result
 			if !m.ExitModal.Visible() {
-				if m.ExitModal.Result() == modal.ResultYes {
+				if m.ExitModal.Confirmed() {
 					return m, tea.Quit
+				} else {
+					m.Focus = FocusSidebar
+					m.Sidebar.SetFocused(true)
 				}
 			}
 			return m, tea.Batch(cmds...)
@@ -84,6 +88,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.Filter.Active() != prevActive || m.Filter.Active() {
 					m = m.applyFilter()
 				}
+				// Adjust table size now that filter is hidden
+				m = m.updateTableSize()
 				// Return focus to main table
 				m.Focus = FocusMain
 				m.Sidebar.SetFocused(false)
@@ -92,25 +98,57 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 		}
 
+		if m.CreateConnectionModal.Visible() {
+			m.CreateConnectionModal, cmd = m.CreateConnectionModal.Update(msg)
+			cmds = append(cmds, cmd)
+
+			// Check if modal was closed
+			if !m.CreateConnectionModal.Visible() {
+				// Check if user submitted the form
+				if m.CreateConnectionModal.Result() == modal.ResultSubmit {
+					// TODO: Handle connection creation with:
+					// - Driver: m.CreateConnectionModal.GetDriver()
+					// - URL: m.CreateConnectionModal.GetURL()
+				}
+				m.Focus = FocusSidebar
+				m.Sidebar.SetFocused(true)
+			}
+			return m, tea.Batch(cmds...)
+		}
+
 		switch msg.String() {
 		case "ctrl+c", "q":
-			m.ExitModal.Show()
-			m.Focus = FocusModal
+			if m.Focus == FocusSidebar || m.Focus == FocusMain {
+				m.ExitModal.Show()
+				m.Focus = FocusExitModal
+			}
 
 		case "/", "f":
-			if m.Focus == FocusMain {
+			// Only allow filter when database is selected and main is focused
+			if m.Focus == FocusMain && m.Sidebar.HasActiveDatabase() {
 				m.Filter.SetVisible(true)
 				m.Focus = FocusFilter
+				// Adjust table height to account for filter bar
+				m = m.updateTableSize()
 			} else {
 				m.Sidebar, cmd = m.Sidebar.Update(msg)
 				cmds = append(cmds, cmd)
 			}
 
-		case "tab":
+		case "n":
 			if m.Focus == FocusSidebar {
-				m.Focus = FocusMain
-				m.Sidebar.SetFocused(false)
-				m.Main.SetFocused(true)
+				m.CreateConnectionModal.Show()
+				m.Focus = FocusCreateConnectionModal
+			}
+		case "tab":
+			// Only allow switching to main table if a database is selected
+			if m.Focus == FocusSidebar {
+				if m.Sidebar.HasActiveDatabase() {
+					m.Focus = FocusMain
+					m.Sidebar.SetFocused(false)
+					m.Main.SetFocused(true)
+				}
+				// If no database selected, stay on sidebar
 			} else {
 				m.Focus = FocusSidebar
 				m.Sidebar.SetFocused(true)
@@ -131,6 +169,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "C":
 			m.Filter.Clear()
 			m = m.applyFilter()
+			m = m.updateTableSize()
 
 		default:
 			if m.Focus == FocusSidebar {
@@ -171,6 +210,23 @@ func (m Model) updateStyles() Model {
 	t := theme.Current
 	m.HeaderStyle = t.Header.Width(m.TerminalWidth).Render("DB Client TUI [" + t.Name + "]")
 	m.FooterStyle = t.Footer.Width(m.TerminalWidth).Render("Tab: Switch | /: Filter | T: Theme | q: Quit")
+	return m
+}
+
+// updateTableSize adjusts table size based on filter visibility
+func (m Model) updateTableSize() Model {
+	tableWidth := m.ContentWidth - 4
+	contentHeight := m.ContentHeight - 2
+
+	filterBarHeight := 0
+	if m.Filter.Visible() {
+		filterBarHeight = 3
+	} else if m.Filter.Active() {
+		filterBarHeight = 1
+	}
+
+	tableHeight := contentHeight - filterBarHeight - 2
+	m.Main.SetSize(tableWidth, tableHeight)
 	return m
 }
 

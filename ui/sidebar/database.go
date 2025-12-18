@@ -68,12 +68,27 @@ func (m Model) Cursor() int {
 	return m.cursor
 }
 
-// SelectedDatabase returns the currently selected database
+// SelectedDatabase returns the currently selected database (cursor position)
 func (m Model) SelectedDatabase() *Database {
 	if m.cursor >= 0 && m.cursor < len(m.databases) {
 		return &m.databases[m.cursor]
 	}
 	return nil
+}
+
+// ActiveDatabase returns the database that has been activated (via Enter key)
+func (m Model) ActiveDatabase() *Database {
+	for i := range m.databases {
+		if m.databases[i].Selected {
+			return &m.databases[i]
+		}
+	}
+	return nil
+}
+
+// HasActiveDatabase returns true if a database has been selected/activated
+func (m Model) HasActiveDatabase() bool {
+	return m.ActiveDatabase() != nil
 }
 
 // SetDatabases updates the database list

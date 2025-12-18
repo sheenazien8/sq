@@ -3,7 +3,8 @@ package app
 import (
 	"github.com/sheenazien8/db-client-tui/config"
 	"github.com/sheenazien8/db-client-tui/ui/filter"
-	"github.com/sheenazien8/db-client-tui/ui/modal"
+	modalcreateconnection "github.com/sheenazien8/db-client-tui/ui/modal-create-connection"
+	modalexit "github.com/sheenazien8/db-client-tui/ui/modal-exit"
 	"github.com/sheenazien8/db-client-tui/ui/sidebar"
 	"github.com/sheenazien8/db-client-tui/ui/table"
 	"github.com/sheenazien8/db-client-tui/ui/theme"
@@ -20,15 +21,17 @@ const (
 	FocusSidebar Focus = iota
 	FocusMain
 	FocusFilter
-	FocusModal
+	FocusExitModal
+	FocusCreateConnectionModal
 )
 
 type Model struct {
-	Sidebar   sidebar.Model
-	Main      table.Model
-	Filter    filter.Model
-	ExitModal modal.Model
-	Focus     Focus
+	Sidebar               sidebar.Model
+	Main                  table.Model
+	Filter                filter.Model
+	ExitModal             modalexit.Model
+	CreateConnectionModal modalcreateconnection.Model
+	Focus                 Focus
 
 	allRows     []table.Row
 	columns     []table.Column
@@ -74,13 +77,15 @@ func New() Model {
 		}
 	}
 
-	exitModal := modal.New("Exit", "Are you sure you want to quit?")
+	exitModal := modalexit.New()
+	createConnectionModal := modalcreateconnection.New()
 
 	return Model{
-		Sidebar:    s,
-		ExitModal:  exitModal,
-		Focus:      FocusSidebar,
-		themeIndex: themeIdx,
-		config:     cfg,
+		Sidebar:               s,
+		ExitModal:             exitModal,
+		CreateConnectionModal: createConnectionModal,
+		Focus:                 FocusSidebar,
+		themeIndex:            themeIdx,
+		config:                cfg,
 	}
 }

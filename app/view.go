@@ -15,6 +15,10 @@ func (m Model) View() string {
 		return m.ExitModal.View()
 	}
 
+	if m.CreateConnectionModal.Visible() {
+		return m.CreateConnectionModal.View()
+	}
+
 	t := theme.Current
 
 	sidebarView := m.Sidebar.View()
@@ -37,28 +41,46 @@ func (m Model) View() string {
 
 	tableHeight := contentHeight - filterBarHeight
 
-	contentView := tableBorderStyle.
-		Width(m.ContentWidth).
-		Height(tableHeight).
-		Render(m.Main.View())
-
 	var mainArea string
-	if m.Filter.Visible() {
-		filterView := m.Filter.View()
-		mainArea = lipgloss.JoinVertical(lipgloss.Left, filterView, contentView)
-	} else if m.Filter.Active() {
-		f := m.Filter.GetFilter()
-		statusStyle := lipgloss.NewStyle().
-			Foreground(t.Colors.Foreground).
-			Background(t.Colors.Primary).
-			Padding(0, 1)
-		clearHint := lipgloss.NewStyle().
+
+	// Only show table content if a database has been selected
+	if !m.Sidebar.HasActiveDatabase() {
+		// Show placeholder when no database is selected
+		placeholderStyle := lipgloss.NewStyle().
 			Foreground(t.Colors.ForegroundDim).
-			Render(" | C: clear | /: edit")
-		filterStatus := statusStyle.Render("Active: "+f.Column+" "+string(f.Operator)+" \""+f.Value+"\"") + clearHint
-		mainArea = lipgloss.JoinVertical(lipgloss.Left, filterStatus, contentView)
+			Align(lipgloss.Center, lipgloss.Center).
+			Width(m.ContentWidth).
+			Height(contentHeight)
+
+		placeholder := placeholderStyle.Render("Select a database from the sidebar\n(Press Enter to select)")
+
+		mainArea = tableBorderStyle.
+			Width(m.ContentWidth).
+			Height(contentHeight).
+			Render(placeholder)
 	} else {
-		mainArea = contentView
+		contentView := tableBorderStyle.
+			Width(m.ContentWidth).
+			Height(tableHeight).
+			Render(m.Main.View())
+
+		if m.Filter.Visible() {
+			filterView := m.Filter.View()
+			mainArea = lipgloss.JoinVertical(lipgloss.Left, filterView, contentView)
+		} else if m.Filter.Active() {
+			f := m.Filter.GetFilter()
+			statusStyle := lipgloss.NewStyle().
+				Foreground(t.Colors.Foreground).
+				Background(t.Colors.Primary).
+				Padding(0, 1)
+			clearHint := lipgloss.NewStyle().
+				Foreground(t.Colors.ForegroundDim).
+				Render(" | C: clear | /: edit")
+			filterStatus := statusStyle.Render("Active: "+f.Column+" "+string(f.Operator)+" \""+f.Value+"\"") + clearHint
+			mainArea = lipgloss.JoinVertical(lipgloss.Left, filterStatus, contentView)
+		} else {
+			mainArea = contentView
+		}
 	}
 
 	middleSection := lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, mainArea)
