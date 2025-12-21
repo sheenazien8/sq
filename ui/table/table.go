@@ -30,6 +30,7 @@ type Model struct {
 	colOffset int
 	rowOffset int
 	cursorRow int
+	cursorCol int
 
 	focused bool
 }
@@ -42,6 +43,7 @@ func New(columns []Column, rows []Row) Model {
 		colOffset: 0,
 		rowOffset: 0,
 		cursorRow: 0,
+		cursorCol: 0,
 		focused:   true,
 	}
 }
@@ -75,17 +77,36 @@ func (m Model) SelectedRow() Row {
 	return nil
 }
 
+// SelectedCell returns the content of the currently selected cell
+func (m Model) SelectedCell() string {
+	if m.cursorRow >= 0 && m.cursorRow < len(m.rows) {
+		row := m.rows[m.cursorRow]
+		if m.cursorCol >= 0 && m.cursorCol < len(row) {
+			return row[m.cursorCol]
+		}
+	}
+	return ""
+}
+
 // SetRows updates the table rows
 func (m *Model) SetRows(rows []Row) {
 	m.rows = rows
 	if m.cursorRow >= len(rows) {
 		m.cursorRow = max(0, len(rows)-1)
 	}
+	// Ensure cursorCol is valid
+	if m.cursorCol >= len(m.columns) {
+		m.cursorCol = max(0, len(m.columns)-1)
+	}
 }
 
 // SetColumns updates the table columns
 func (m *Model) SetColumns(columns []Column) {
 	m.columns = columns
+	// Ensure cursorCol is valid
+	if m.cursorCol >= len(columns) {
+		m.cursorCol = max(0, len(columns)-1)
+	}
 }
 
 // visibleRows returns the number of rows that can be displayed
@@ -165,19 +186,36 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			m.cursorRow = max(0, len(m.rows)-1)
 			m.rowOffset = m.maxRowOffset()
 
-		// Horizontal navigation (scroll columns)
+		// Horizontal navigation (move cursor between columns)
 		case "left", "h":
-			if m.colOffset > 0 {
-				m.colOffset--
+			if m.cursorCol > 0 {
+				m.cursorCol--
+				// Adjust column offset if cursor goes off screen
+				if m.cursorCol < m.colOffset {
+					m.colOffset = m.cursorCol
+				}
 			}
 		case "right", "l":
-			if m.colOffset < m.maxColOffset() {
-				m.colOffset++
+			if m.cursorCol < len(m.columns)-1 {
+				m.cursorCol++
+				// Adjust column offset if cursor goes off screen
+				visibleCols := m.visibleCols()
+				if m.cursorCol >= m.colOffset+visibleCols {
+					m.colOffset = m.cursorCol - visibleCols + 1
+				}
 			}
 		case "H":
+			m.cursorCol = 0
 			m.colOffset = 0
 		case "L":
-			m.colOffset = m.maxColOffset()
+			m.cursorCol = len(m.columns) - 1
+			// Adjust column offset to show the last columns
+			visibleCols := m.visibleCols()
+			if len(m.columns) > visibleCols {
+				m.colOffset = len(m.columns) - visibleCols
+			} else {
+				m.colOffset = 0
+			}
 		}
 	}
 
@@ -261,7 +299,7 @@ func (m Model) renderDataRow(rowIdx, startCol, endCol int) string {
 	t := theme.Current
 	var cells []string
 	row := m.rows[rowIdx]
-	isSelected := rowIdx == m.cursorRow
+	isSelectedRow := rowIdx == m.cursorRow
 
 	for i := startCol; i < endCol; i++ {
 		col := m.columns[i]
@@ -273,7 +311,8 @@ func (m Model) renderDataRow(rowIdx, startCol, endCol int) string {
 		cellText := truncateOrPad(cellContent, col.Width)
 
 		var cell string
-		if isSelected && m.focused {
+		isSelectedCell := isSelectedRow && i == m.cursorCol
+		if isSelectedCell && m.focused {
 			cell = t.TableSelected.Render(" " + cellText + " ")
 		} else {
 			cell = t.TableCell.Render(" " + cellText + " ")
@@ -304,8 +343,8 @@ func (m Model) renderEmptyRow(startCol, endCol int) string {
 func (m Model) renderStatusBar() string {
 	t := theme.Current
 
-	leftInfo := t.StatusBar.Render("Row " + intToStr(m.cursorRow+1) + "/" + intToStr(len(m.rows)))
-	rightInfo := t.StatusBar.Render("Col " + intToStr(m.colOffset+1) + "-" + intToStr(min(m.colOffset+m.visibleCols(), len(m.columns))) + "/" + intToStr(len(m.columns)) + " | ←→:scroll")
+	leftInfo := t.StatusBar.Render("Row " + intToStr(m.cursorRow+1) + "/" + intToStr(len(m.rows)) + ", Col " + intToStr(m.cursorCol+1) + "/" + intToStr(len(m.columns)))
+	rightInfo := t.StatusBar.Render("Cols " + intToStr(m.colOffset+1) + "-" + intToStr(min(m.colOffset+m.visibleCols(), len(m.columns))) + "/" + intToStr(len(m.columns)) + " | h/l:cell ←→")
 
 	// Calculate spacing
 	spacing := max(m.width-lipgloss.Width(leftInfo)-lipgloss.Width(rightInfo), 1)
