@@ -9,6 +9,7 @@ import (
 	"github.com/sheenazien8/db-client-tui/storage"
 	"github.com/sheenazien8/db-client-tui/ui/filter"
 	"github.com/sheenazien8/db-client-tui/ui/modal"
+	"github.com/sheenazien8/db-client-tui/ui/sidebar"
 	"github.com/sheenazien8/db-client-tui/ui/table"
 	"github.com/sheenazien8/db-client-tui/ui/theme"
 )
@@ -18,6 +19,46 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
+
+	case sidebar.TableSelectedMsg:
+		logger.Debug("Table selected", map[string]any{
+			"connection": msg.ConnectionName,
+			"table":      msg.TableName,
+		})
+
+		// Get connection from sidebar
+		activeDB := m.Sidebar.ActiveDatabase()
+		if activeDB == nil {
+			logger.Error("No active database", map[string]any{})
+			return m, nil
+		}
+
+		// TODO: Load actual table data from database
+		// For now, use mock data
+		m.columns, m.allRows = getTableData()
+		m.columnNames = getColumnNames(m.columns)
+
+		// Initialize filter if not already done
+		if m.Filter.GetFilter() == nil && len(m.columnNames) == 0 {
+			m.Filter = filter.New(m.columnNames)
+			m.Filter.SetWidth(m.ContentWidth)
+		}
+
+		// Add tab with table data
+		tabName := msg.ConnectionName + "." + msg.TableName
+		m.Tabs.AddTableTab(tabName, m.columns, m.allRows)
+
+		// Set tab dimensions (filter bar is always 3 lines with border)
+		tableWidth := m.ContentWidth - 4
+		tableHeight := m.ContentHeight - 3 - 2
+		m.Tabs.SetSize(tableWidth, tableHeight)
+
+		// Switch focus to main area
+		m.Focus = FocusMain
+		m.Sidebar.SetFocused(false)
+		m.Tabs.SetFocused(true)
+
+		return m, nil
 
 	case tea.WindowSizeMsg:
 		m.TerminalWidth = msg.Width
@@ -43,25 +84,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ContentHeight = contentHeight
 
 		tableWidth := contentWidth - 4
-		tableHeight := contentHeight - 2
+		// Filter bar is always 3 lines (with border)
+		tableHeight := contentHeight - 3 - 2
 
 		if !m.initialized {
 			logger.Debug("Initial window size", map[string]any{
 				"width":  msg.Width,
 				"height": msg.Height,
 			})
-			m.columns, m.allRows = getTableData()
-			m.columnNames = getColumnNames(m.columns)
-			m.Main = table.New(m.columns, m.allRows)
-			m.Main.SetSize(tableWidth, tableHeight)
-			m.Main.SetFocused(false) // Sidebar starts focused
-			m.Filter = filter.New(m.columnNames)
+			m.Filter = filter.New([]string{}) // Initialize with empty columns
 			m.initialized = true
-		} else {
-			m.Main.SetSize(tableWidth, tableHeight)
 		}
 
 		m.Filter.SetWidth(contentWidth)
+		m.Tabs.SetSize(tableWidth, tableHeight)
 
 		m.Sidebar.SetSize(m.SidebarWidth, contentHeight)
 
@@ -92,16 +128,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Check if filter was closed (applied or escaped)
 			if !m.Filter.Visible() {
-				// Apply filter if needed
-				if m.Filter.Active() != prevActive || m.Filter.Active() {
-					m = m.applyFilter()
+				f := m.Filter.GetFilter()
+				
+				// If filter was applied (Enter pressed), add it to the tab
+				if f != nil && (m.Filter.Active() || m.Filter.Active() != prevActive) {
+					m.Tabs.AddActiveTabFilter(*f)
+					m = m.applyFilterToActiveTab()
 				}
+				
 				// Adjust table size now that filter is hidden
-				m = m.updateTableSize()
-				// Return focus to main table
+				m = m.updateTabSize()
+				// Return focus to tabs
 				m.Focus = FocusMain
 				m.Sidebar.SetFocused(false)
-				m.Main.SetFocused(true)
+				m.Tabs.SetFocused(true)
 			}
 			return m, tea.Batch(cmds...)
 		}
@@ -151,12 +191,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "/", "f":
-			// Only allow filter when database is selected and main is focused
-			if m.Focus == FocusMain && m.Sidebar.HasActiveDatabase() {
-				m.Filter.SetVisible(true)
-				m.Focus = FocusFilter
-				// Adjust table height to account for filter bar
-				m = m.updateTableSize()
+			if m.Focus == FocusMain && m.Tabs.HasTabs() {
+				// Get active tab's column names
+				_, _, columnNames := m.Tabs.GetActiveTabData()
+				
+				if columnNames != nil {
+					// Update filter columns based on active tab
+					m.Filter = filter.New(columnNames)
+					m.Filter.SetWidth(m.ContentWidth)
+					m.Filter.SetVisible(true)
+					m.Focus = FocusFilter
+					m = m.updateTabSize()
+				}
 			} else {
 				m.Sidebar, cmd = m.Sidebar.Update(msg)
 				cmds = append(cmds, cmd)
@@ -168,18 +214,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Focus = FocusCreateConnectionModal
 			}
 		case "tab":
-			// Only allow switching to main table if a database is selected
+			// Only allow switching to main table if tabs are open
 			if m.Focus == FocusSidebar {
-				if m.Sidebar.HasActiveDatabase() {
+				if m.Tabs.HasTabs() {
 					logger.Debug("Focus changed", map[string]any{
 						"from": "sidebar",
 						"to":   "main",
 					})
 					m.Focus = FocusMain
 					m.Sidebar.SetFocused(false)
-					m.Main.SetFocused(true)
+					m.Tabs.SetFocused(true)
 				}
-				// If no database selected, stay on sidebar
 			} else {
 				logger.Debug("Focus changed", map[string]any{
 					"from": "main",
@@ -187,7 +232,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				})
 				m.Focus = FocusSidebar
 				m.Sidebar.SetFocused(true)
-				m.Main.SetFocused(false)
+				m.Tabs.SetFocused(false)
 			}
 
 		case "T":
@@ -203,16 +248,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m = m.updateStyles()
 
 		case "C":
-			m.Filter.Clear()
-			m = m.applyFilter()
-			m = m.updateTableSize()
+			m.Tabs.ClearActiveTabFilters()
+			m = m.applyFilterToActiveTab()
+			m = m.updateTabSize()
 
 		default:
 			if m.Focus == FocusSidebar {
 				m.Sidebar, cmd = m.Sidebar.Update(msg)
 				cmds = append(cmds, cmd)
 			} else {
-				m.Main, cmd = m.Main.Update(msg)
+				m.Tabs, cmd = m.Tabs.Update(msg)
 				cmds = append(cmds, cmd)
 			}
 		}
@@ -221,28 +266,59 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-// applyFilter filters the table rows based on current filter
-func (m Model) applyFilter() Model {
-	f := m.Filter.GetFilter()
-	if f == nil {
-		logger.Debug("Filter cleared", map[string]any{"total_rows": len(m.allRows)})
-		m.Main.SetRows(m.allRows)
+// applyFilterToActiveTab filters the table rows in the active tab based on current filters
+func (m Model) applyFilterToActiveTab() Model {
+	activeTab := m.Tabs.ActiveTab()
+	if activeTab == nil {
+		return m
+	}
+
+	// Get the active tab's original data
+	allRows, _, columnNames := m.Tabs.GetActiveTabData()
+	if allRows == nil {
+		return m
+	}
+
+	filters := m.Tabs.GetActiveTabFilters()
+	
+	if len(filters) == 0 {
+		logger.Debug("Filter cleared", map[string]any{"total_rows": len(allRows)})
+		// Reset to original data
+		if tableModel, ok := activeTab.Content.(table.Model); ok {
+			tableModel.SetRows(allRows)
+			m.Tabs.UpdateActiveTabContent(tableModel)
+		}
 	} else {
-		logger.Debug("Filter applied", map[string]any{
-			"column":   f.Column,
-			"operator": f.Operator,
-			"value":    f.Value,
+		logger.Debug("Filters applied", map[string]any{
+			"filter_count": len(filters),
 		})
-		rows := make([][]string, len(m.allRows))
-		for i, row := range m.allRows {
+		
+		// Convert to [][]string for filtering
+		rows := make([][]string, len(allRows))
+		for i, row := range allRows {
 			rows[i] = []string(row)
 		}
-		filtered := filter.FilterRows(rows, m.columnNames, f)
+		
+		// Apply all filters sequentially (AND logic)
+		filtered := rows
+		for _, f := range filters {
+			filtered = filter.FilterRows(filtered, columnNames, &f)
+		}
+		
 		tableRows := make([]table.Row, len(filtered))
 		for i, row := range filtered {
 			tableRows[i] = table.Row(row)
 		}
-		m.Main.SetRows(tableRows)
+		
+		logger.Debug("Filter result", map[string]any{
+			"original_rows": len(allRows),
+			"filtered_rows": len(tableRows),
+		})
+		
+		if tableModel, ok := activeTab.Content.(table.Model); ok {
+			tableModel.SetRows(tableRows)
+			m.Tabs.UpdateActiveTabContent(tableModel)
+		}
 	}
 	return m
 }
@@ -255,20 +331,16 @@ func (m Model) updateStyles() Model {
 	return m
 }
 
-// updateTableSize adjusts table size based on filter visibility
-func (m Model) updateTableSize() Model {
+// updateTabSize adjusts tab size based on filter visibility
+func (m Model) updateTabSize() Model {
 	tableWidth := m.ContentWidth - 4
 	contentHeight := m.ContentHeight
 
-	filterBarHeight := 0
-	if m.Filter.Visible() {
-		filterBarHeight = 3
-	} else if m.Filter.Active() {
-		filterBarHeight = 1
-	}
+	// Filter bar is always 3 lines (with border)
+	filterBarHeight := 3
 
 	tableHeight := contentHeight - filterBarHeight - 2
-	m.Main.SetSize(tableWidth, tableHeight)
+	m.Tabs.SetSize(tableWidth, tableHeight)
 	return m
 }
 

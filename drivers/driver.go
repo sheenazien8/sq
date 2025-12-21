@@ -1,7 +1,7 @@
 package drivers
 
 const (
-	DriverMySQL    string = "mysql"
+	DriverMySQL string = "mysql"
 )
 
 type Driver interface {
@@ -9,4 +9,5 @@ type Driver interface {
 	TestConnection(urlstr string) error
 	GetTables(database string) (map[string][]string, error)
 	GetTableColumns(database, table string) ([][]string, error)
+	GetTableData(database, table string) ([][]string, error)
 }

@@ -27,9 +27,9 @@ type Model struct {
 	height int
 
 	// Scroll offsets
-	colOffset int // horizontal scroll offset (column index)
-	rowOffset int // vertical scroll offset (row index)
-	cursorRow int // currently selected row
+	colOffset int
+	rowOffset int
+	cursorRow int
 
 	focused bool
 }
@@ -90,7 +90,6 @@ func (m *Model) SetColumns(columns []Column) {
 
 // visibleRows returns the number of rows that can be displayed
 func (m Model) visibleRows() int {
-	// Account for header (1 line), separator (1 line), and status bar (1 line)
 	return max(0, m.height-3)
 }
 
@@ -104,7 +103,7 @@ func (m Model) visibleCols() int {
 	count := 0
 
 	for i := m.colOffset; i < len(m.columns); i++ {
-		colWidth := m.columns[i].Width + 3 // +3 for padding and separator
+		colWidth := m.columns[i].Width + 3
 		if usedWidth+colWidth > m.width {
 			break
 		}
@@ -153,10 +152,10 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 					m.rowOffset = m.cursorRow - m.visibleRows() + 1
 				}
 			}
-		case "pgup":
+		case "pgup", "K":
 			m.cursorRow = max(0, m.cursorRow-m.visibleRows())
 			m.rowOffset = max(0, m.rowOffset-m.visibleRows())
-		case "pgdown":
+		case "pgdown", "J":
 			m.cursorRow = min(len(m.rows)-1, m.cursorRow+m.visibleRows())
 			m.rowOffset = min(m.maxRowOffset(), m.rowOffset+m.visibleRows())
 		case "home":
@@ -175,9 +174,9 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			if m.colOffset < m.maxColOffset() {
 				m.colOffset++
 			}
-		case "H": // Jump to first column
+		case "H":
 			m.colOffset = 0
-		case "L": // Jump to last column
+		case "L":
 			m.colOffset = m.maxColOffset()
 		}
 	}
@@ -309,7 +308,7 @@ func (m Model) renderStatusBar() string {
 	rightInfo := t.StatusBar.Render("Col " + intToStr(m.colOffset+1) + "-" + intToStr(min(m.colOffset+m.visibleCols(), len(m.columns))) + "/" + intToStr(len(m.columns)) + " | ←→:scroll")
 
 	// Calculate spacing
-	spacing := max(m.width - lipgloss.Width(leftInfo) - lipgloss.Width(rightInfo), 1)
+	spacing := max(m.width-lipgloss.Width(leftInfo)-lipgloss.Width(rightInfo), 1)
 
 	return leftInfo + strings.Repeat(" ", spacing) + rightInfo
 }

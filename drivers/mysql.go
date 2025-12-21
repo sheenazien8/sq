@@ -90,3 +90,54 @@ func (db *MySQL) GetTableColumns(database, table string) ([][]string, error) {
 
 	return columns, nil
 }
+
+func (db *MySQL) GetTableData(database, table string) ([][]string, error) {
+	query := "SELECT * FROM " + database + "." + table + " LIMIT 1000"
+	rows, err := db.Connection.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+
+	var data [][]string
+	// Add header row
+	data = append(data, columns)
+
+	for rows.Next() {
+		values := make([]interface{}, len(columns))
+		valuePtrs := make([]interface{}, len(columns))
+		for i := range columns {
+			valuePtrs[i] = &values[i]
+		}
+
+		if err := rows.Scan(valuePtrs...); err != nil {
+			return nil, err
+		}
+
+		row := make([]string, len(columns))
+		for i, val := range values {
+			if val == nil {
+				row[i] = "NULL"
+			} else {
+				switch v := val.(type) {
+				case []byte:
+					row[i] = string(v)
+				default:
+					row[i] = sql.NullString{String: string(v.([]byte)), Valid: true}.String
+				}
+			}
+		}
+		data = append(data, row)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}

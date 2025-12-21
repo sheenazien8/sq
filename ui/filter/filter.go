@@ -108,6 +108,8 @@ func (m *Model) SetVisible(visible bool) {
 	m.visible = visible
 	if visible {
 		m.focusField = FocusColumn
+		// Clear previous value and blur
+		m.valueInput.SetValue("")
 		m.valueInput.Blur()
 	}
 }
@@ -221,12 +223,15 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			return m, cmd
 		}
 
-		// Navigation for column and operator fields
+		// Navigation for fields
 		switch key {
 		case "tab", "l", "right":
 			m.focusField = (m.focusField + 1) % 3
 			if m.focusField == FocusValue {
-				m.valueInput.Focus()
+				cmd = m.valueInput.Focus()
+				return m, cmd
+			} else {
+				m.valueInput.Blur()
 			}
 		case "shift+tab", "h", "left":
 			if m.focusField == 0 {
@@ -235,7 +240,10 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				m.focusField--
 			}
 			if m.focusField == FocusValue {
-				m.valueInput.Focus()
+				cmd = m.valueInput.Focus()
+				return m, cmd
+			} else {
+				m.valueInput.Blur()
 			}
 		case "up", "k":
 			if m.focusField == FocusColumn && len(m.columns) > 0 {
@@ -271,7 +279,6 @@ func (m Model) View() string {
 
 	t := theme.Current
 
-	// Focused and unfocused styles
 	focusedStyle := lipgloss.NewStyle().
 		Foreground(t.Colors.Foreground).
 		Background(t.Colors.Primary).
@@ -284,7 +291,6 @@ func (m Model) View() string {
 	labelStyle := lipgloss.NewStyle().
 		Foreground(t.Colors.ForegroundDim)
 
-	// Build column field
 	var columnValue string
 	if len(m.columns) > 0 {
 		columnValue = m.columns[m.columnIndex]
@@ -299,7 +305,6 @@ func (m Model) View() string {
 		columnField = unfocusedStyle.Render("  " + columnValue + "  ")
 	}
 
-	// Build operator field
 	opValue := string(operators[m.operatorIndex])
 	opLabel := labelStyle.Render("  Op: ")
 	var opField string
@@ -309,11 +314,9 @@ func (m Model) View() string {
 		opField = unfocusedStyle.Render("  " + padOperator(opValue) + "  ")
 	}
 
-	// Build value field
 	valueLabel := labelStyle.Render("  Value: ")
 	var valueField string
 	if m.focusField == FocusValue {
-		// Render text input with cursor
 		inputStyle := lipgloss.NewStyle().
 			Foreground(t.Colors.Foreground).
 			Background(t.Colors.SelectionBg).

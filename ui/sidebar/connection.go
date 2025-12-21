@@ -19,29 +19,44 @@ type Table struct {
 // Connection represents a database item in the sidebar
 type Connection struct {
 	Name     string
-	Type     string // mysql, postgres, sqlite, etc.
+	Type     string
 	Host     string
 	Selected bool
+	Expanded bool
 	Tables   []Table
+}
+
+// TreeItem represents an item in the tree (connection or table)
+type TreeItem struct {
+	ConnectionIndex int
+	TableIndex      int
+	Level           int
+	IsLastChild     bool
+}
+
+// TableSelectedMsg is sent when a table is selected in the sidebar
+type TableSelectedMsg struct {
+	ConnectionName string
+	TableName      string
 }
 
 // Model represents the sidebar with database list
 type Model struct {
-	databases []Connection
-	cursor    int
-	offset    int
-	width     int
-	height    int
-	focused   bool
+	connections []Connection
+	cursor      int
+	offset      int
+	width       int
+	height      int
+	focused     bool
 }
 
 // New creates a new sidebar model with sample databases
 func New() Model {
 	return Model{
-		databases: getConnections(),
-		cursor:    0,
-		offset:    0,
-		focused:   false,
+		connections: getConnections(),
+		cursor:      0,
+		offset:      0,
+		focused:     false,
 	}
 }
 
@@ -59,10 +74,20 @@ func getConnections() (data []Connection) {
 	})
 
 	for _, connection := range connections {
+		// Add mock tables for demonstration
+		mockTables := []Table{
+			{Name: "users", RowCount: 1250},
+			{Name: "products", RowCount: 500},
+			{Name: "orders", RowCount: 3200},
+			{Name: "categories", RowCount: 45},
+		}
+
 		data = append(data, Connection{
-			Name: connection.Name,
-			Type: connection.Driver,
-			Host: connection.URL,
+			Name:     connection.Name,
+			Type:     connection.Driver,
+			Host:     connection.URL,
+			Tables:   mockTables,
+			Expanded: false, // start collapsed
 		})
 	}
 
@@ -90,19 +115,30 @@ func (m Model) Cursor() int {
 	return m.cursor
 }
 
+// SelectedItem returns the currently selected tree item
+func (m Model) SelectedItem() *TreeItem {
+	treeItems := m.getTreeItems()
+	if m.cursor >= 0 && m.cursor < len(treeItems) {
+		item := treeItems[m.cursor]
+		return &item
+	}
+	return nil
+}
+
 // SelectedDatabase returns the currently selected database (cursor position)
 func (m Model) SelectedDatabase() *Connection {
-	if m.cursor >= 0 && m.cursor < len(m.databases) {
-		return &m.databases[m.cursor]
+	selectedItem := m.SelectedItem()
+	if selectedItem != nil && selectedItem.Level == 0 {
+		return &m.connections[selectedItem.ConnectionIndex]
 	}
 	return nil
 }
 
 // ActiveDatabase returns the database that has been activated (via Enter key)
 func (m Model) ActiveDatabase() *Connection {
-	for i := range m.databases {
-		if m.databases[i].Selected {
-			return &m.databases[i]
+	for i := range m.connections {
+		if m.connections[i].Selected {
+			return &m.connections[i]
 		}
 	}
 	return nil
@@ -115,18 +151,48 @@ func (m Model) HasActiveDatabase() bool {
 
 // SetDatabases updates the database list
 func (m *Model) SetDatabases(databases []Connection) {
-	m.databases = databases
-	if m.cursor >= len(databases) {
-		m.cursor = max(0, len(databases)-1)
+	m.connections = databases
+	treeItems := m.getTreeItems()
+	if m.cursor >= len(treeItems) {
+		m.cursor = max(0, len(treeItems)-1)
 	}
 }
 
 // RefreshConnections reloads the connections from storage
 func (m *Model) RefreshConnections() {
-	m.databases = getConnections()
-	if m.cursor >= len(m.databases) {
-		m.cursor = max(0, len(m.databases)-1)
+	m.connections = getConnections()
+	treeItems := m.getTreeItems()
+	if m.cursor >= len(treeItems) {
+		m.cursor = max(0, len(treeItems)-1)
 	}
+}
+
+// getTreeItems returns a flattened list of all visible tree items
+func (m Model) getTreeItems() []TreeItem {
+	var items []TreeItem
+
+	for connIdx, conn := range m.connections {
+		items = append(items, TreeItem{
+			ConnectionIndex: connIdx,
+			TableIndex:      -1,
+			Level:           0,
+			IsLastChild:     false,
+		})
+
+		if conn.Expanded {
+			for tableIdx := range conn.Tables {
+				isLast := tableIdx == len(conn.Tables)-1
+				items = append(items, TreeItem{
+					ConnectionIndex: connIdx,
+					TableIndex:      tableIdx,
+					Level:           1,
+					IsLastChild:     isLast,
+				})
+			}
+		}
+	}
+
+	return items
 }
 
 // visibleItems returns the number of items that can be displayed
@@ -146,6 +212,8 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		return m, nil
 	}
 
+	treeItems := m.getTreeItems()
+
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -157,7 +225,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				}
 			}
 		case "down", "j":
-			if m.cursor < len(m.databases)-1 {
+			if m.cursor < len(treeItems)-1 {
 				m.cursor++
 				if m.cursor >= m.offset+m.visibleItems() {
 					m.offset = m.cursor - m.visibleItems() + 1
@@ -167,16 +235,42 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			m.cursor = 0
 			m.offset = 0
 		case "end":
-			m.cursor = max(0, len(m.databases)-1)
-			maxOffset := max(0, len(m.databases)-m.visibleItems())
+			m.cursor = max(0, len(treeItems)-1)
+			maxOffset := max(0, len(treeItems)-m.visibleItems())
 			m.offset = maxOffset
 		case "enter":
-			if m.cursor >= 0 && m.cursor < len(m.databases) {
-				// Clear previous selection
-				for i := range m.databases {
-					m.databases[i].Selected = false
+			if m.cursor >= 0 && m.cursor < len(treeItems) {
+				item := treeItems[m.cursor]
+				if item.Level == 0 {
+					conn := &m.connections[item.ConnectionIndex]
+					conn.Expanded = !conn.Expanded
+
+					for i := range m.connections {
+						m.connections[i].Selected = false
+					}
+					conn.Selected = true
+
+					logger.Debug("Toggled connection expansion", map[string]any{
+						"name":     conn.Name,
+						"expanded": conn.Expanded,
+					})
+				} else {
+					conn := &m.connections[item.ConnectionIndex]
+					table := &conn.Tables[item.TableIndex]
+
+					logger.Debug("Selected table", map[string]any{
+						"connection": conn.Name,
+						"table":      table.Name,
+						"row_count":  table.RowCount,
+					})
+
+					return m, func() tea.Msg {
+						return TableSelectedMsg{
+							ConnectionName: conn.Name,
+							TableName:      table.Name,
+						}
+					}
 				}
-				m.databases[m.cursor].Selected = true
 			}
 		}
 	}
@@ -199,33 +293,66 @@ func (m Model) View() string {
 	var lines []string
 
 	// Title
-	title := t.SidebarTitle.Width(innerWidth).Render(" Connection name")
+	title := t.SidebarTitle.Width(innerWidth).Render(" Databases")
 	lines = append(lines, title)
 
 	// Separator
 	separatorStyle := lipgloss.NewStyle().Foreground(t.Colors.BorderUnfocused)
 	lines = append(lines, separatorStyle.Render(strings.Repeat("─", innerWidth)))
 
-	// Database items
+	// Tree items
+	treeItems := m.getTreeItems()
 	visibleCount := m.visibleItems()
-	endIdx := min(m.offset+visibleCount, len(m.databases))
+	endIdx := min(m.offset+visibleCount, len(treeItems))
 
 	for i := m.offset; i < endIdx; i++ {
-		db := m.databases[i]
+		item := treeItems[i]
 		isSelected := i == m.cursor
 
-		// Icon based on type
-		icon := getDbIcon(db.Type)
-		text := icon + " " + truncateString(db.Name, innerWidth-4)
+		var text string
+		var style lipgloss.Style
 
-		var line string
-		if isSelected && m.focused {
-			line = t.SidebarSelected.Width(innerWidth).Render(text)
-		} else if db.Selected {
-			line = t.SidebarActive.Width(innerWidth).Render(text)
-		} else {
-			line = t.SidebarItem.Width(innerWidth).Render(text)
+		if item.Level == 0 {
+			conn := m.connections[item.ConnectionIndex]
+			icon := getConnectionIcon(conn.Type)
+
+			treeChar := "▶"
+			if conn.Expanded {
+				treeChar = "▼"
+			}
+
+			text = treeChar + " " + icon + " " + truncateString(conn.Name, innerWidth-6)
+
+			if isSelected && m.focused {
+				style = t.SidebarSelected
+			} else if conn.Selected {
+				style = t.SidebarActive
+			} else {
+				style = t.SidebarItem
+			}
+		} else { // Table
+			conn := m.connections[item.ConnectionIndex]
+			table := conn.Tables[item.TableIndex]
+
+			prefix := "  "
+			if item.IsLastChild {
+				prefix += "└─"
+			} else {
+				prefix += "├─"
+			}
+
+			tableIcon := "󰓫"
+			text = prefix + " " + tableIcon + " " + truncateString(table.Name, innerWidth-8) +
+				" (" + intToStr(int(table.RowCount)) + ")"
+
+			if isSelected && m.focused {
+				style = t.SidebarSelected
+			} else {
+				style = t.SidebarItem
+			}
 		}
+
+		line := style.Width(innerWidth).Render(text)
 		lines = append(lines, line)
 	}
 
@@ -236,7 +363,7 @@ func (m Model) View() string {
 
 	// Status bar
 	status := t.StatusBar.Width(innerWidth).Align(lipgloss.Right).
-		Render(intToStr(m.cursor+1) + "/" + intToStr(len(m.databases)))
+		Render(intToStr(m.cursor+1) + "/" + intToStr(len(treeItems)))
 	lines = append(lines, status)
 
 	// Join content
@@ -256,8 +383,8 @@ func (m Model) View() string {
 		Render(content)
 }
 
-// getDbIcon returns an icon for the database type
-func getDbIcon(dbType string) string {
+// getConnectionIcon returns an icon for the database type
+func getConnectionIcon(dbType string) string {
 	switch dbType {
 	case "mysql":
 		return "[M]"

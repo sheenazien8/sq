@@ -6,6 +6,7 @@ import (
 	modalcreateconnection "github.com/sheenazien8/db-client-tui/ui/modal-create-connection"
 	modalexit "github.com/sheenazien8/db-client-tui/ui/modal-exit"
 	"github.com/sheenazien8/db-client-tui/ui/sidebar"
+	"github.com/sheenazien8/db-client-tui/ui/tab"
 	"github.com/sheenazien8/db-client-tui/ui/table"
 	"github.com/sheenazien8/db-client-tui/ui/theme"
 )
@@ -28,6 +29,7 @@ const (
 type Model struct {
 	Sidebar               sidebar.Model
 	Main                  table.Model
+	Tabs                  tab.Model
 	Filter                filter.Model
 	ExitModal             modalexit.Model
 	CreateConnectionModal modalcreateconnection.Model
@@ -79,9 +81,11 @@ func New() Model {
 
 	exitModal := modalexit.New()
 	createConnectionModal := modalcreateconnection.New()
+	tabs := tab.New()
 
 	return Model{
 		Sidebar:               s,
+		Tabs:                  tabs,
 		ExitModal:             exitModal,
 		CreateConnectionModal: createConnectionModal,
 		Focus:                 FocusSidebar,

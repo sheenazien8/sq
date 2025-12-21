@@ -10,7 +10,6 @@ import (
 	"time"
 )
 
-
 type logger struct {
 	mu     sync.Mutex
 	file   *os.File
@@ -24,7 +23,6 @@ type logMessage struct {
 	Message   string         `json:"message"`
 	Data      map[string]any `json:"additional_info,omitempty"`
 }
-
 
 var logInstance *logger
 

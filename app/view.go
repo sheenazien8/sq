@@ -5,6 +5,34 @@ import (
 	"github.com/sheenazien8/db-client-tui/ui/theme"
 )
 
+// Helper functions
+func intToStr(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	if n < 0 {
+		return "-" + intToStr(-n)
+	}
+	var digits []byte
+	for n > 0 {
+		digits = append([]byte{byte(n%10) + '0'}, digits...)
+		n /= 10
+	}
+	return string(digits)
+}
+
+func joinStrings(strs []string, sep string) string {
+	if len(strs) == 0 {
+		return ""
+	}
+	result := strs[0]
+	for i := 1; i < len(strs); i++ {
+		result += sep + strs[i]
+	}
+	return result
+}
+
+
 // View renders the main application view
 func (m Model) View() string {
 	if m.TerminalWidth == 0 || m.TerminalHeight == 0 {
@@ -31,56 +59,71 @@ func (m Model) View() string {
 	}
 
 	contentHeight := m.ContentHeight - 2
-	filterBarHeight := 0
 
+	// Filter bar height depends on whether we're editing or just showing status
+	var filterBarHeight int
 	if m.Filter.Visible() {
-		filterBarHeight = 3
-	} else if m.Filter.Active() {
-		filterBarHeight = 1
+		filterBarHeight = 3 // Editing mode needs 3 lines
+	} else {
+		filterBarHeight = 3 // Status line with border needs 3 lines (1 content + 2 border)
 	}
-
+	
 	tableHeight := contentHeight - filterBarHeight
 
 	var mainArea string
 
-	// Only show table content if a database has been selected
-	if !m.Sidebar.HasActiveDatabase() {
-		// Show placeholder when no database is selected
+	// Show tabs if they exist, otherwise show placeholder
+	if m.Tabs.HasTabs() {
+		// Show tabbed interface
+		contentView := tableBorderStyle.
+			Width(m.ContentWidth).
+			Height(tableHeight).
+			Render(m.Tabs.View())
+
+		// Always show filter bar
+		var filterView string
+		if m.Filter.Visible() {
+			// Show filter input (3 lines)
+			filterView = m.Filter.View()
+		} else {
+			// Show filter status or empty filter bar (1 line with border)
+			activeTabFilters := m.Tabs.GetActiveTabFilters()
+			
+			var message string
+			if len(activeTabFilters) > 0 {
+				// Show all active filters with AND
+				var filterStrings []string
+				for _, f := range activeTabFilters {
+					filterStrings = append(filterStrings, f.Column+" "+string(f.Operator)+" \""+f.Value+"\"")
+				}
+				message = "Filters (" + intToStr(len(activeTabFilters)) + "): " + joinStrings(filterStrings, " AND ") + " | C: clear | /: add"
+			} else {
+				message = "No filter | Press / to filter"
+			}
+			
+			filterBarStyle := lipgloss.NewStyle().
+				Foreground(t.Colors.Foreground).
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(t.Colors.BorderUnfocused).
+				Padding(0, 1)
+			filterView = filterBarStyle.Render(message)
+		}
+
+		mainArea = lipgloss.JoinVertical(lipgloss.Left, filterView, contentView)
+	} else {
+		// Show placeholder when no tabs are open
 		placeholderStyle := lipgloss.NewStyle().
 			Foreground(t.Colors.ForegroundDim).
 			Align(lipgloss.Center, lipgloss.Center).
 			Width(m.ContentWidth).
 			Height(contentHeight)
 
-		placeholder := placeholderStyle.Render("Select a connection from the sidebar\n(Press Enter to select)")
+		placeholder := placeholderStyle.Render("Select a table from the sidebar to open it in a tab\n(Press Enter on a table to open)")
 
 		mainArea = tableBorderStyle.
 			Width(m.ContentWidth).
 			Height(contentHeight).
 			Render(placeholder)
-	} else {
-		contentView := tableBorderStyle.
-			Width(m.ContentWidth).
-			Height(tableHeight).
-			Render(m.Main.View())
-
-		if m.Filter.Visible() {
-			filterView := m.Filter.View()
-			mainArea = lipgloss.JoinVertical(lipgloss.Left, filterView, contentView)
-		} else if m.Filter.Active() {
-			f := m.Filter.GetFilter()
-			statusStyle := lipgloss.NewStyle().
-				Foreground(t.Colors.Foreground).
-				Background(t.Colors.Primary).
-				Padding(0, 1)
-			clearHint := lipgloss.NewStyle().
-				Foreground(t.Colors.ForegroundDim).
-				Render(" | C: clear | /: edit")
-			filterStatus := statusStyle.Render("Active: "+f.Column+" "+string(f.Operator)+" \""+f.Value+"\"") + clearHint
-			mainArea = lipgloss.JoinVertical(lipgloss.Left, filterStatus, contentView)
-		} else {
-			mainArea = contentView
-		}
 	}
 
 	middleSection := lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, mainArea)
