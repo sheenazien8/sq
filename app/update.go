@@ -185,7 +185,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		footerStyle := t.Footer.Width(m.TerminalWidth)
 
-		m.HeaderStyle = headerStyle.Render("DB Client TUI [" + t.Name + "]")
+		m.HeaderStyle = headerStyle.Render("SQ [" + t.Name + "]")
 		m.FooterStyle = footerStyle.Render(m.getFooterHelp())
 
 		headerHeight := lipgloss.Height(m.HeaderStyle)
