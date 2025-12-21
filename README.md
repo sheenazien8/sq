@@ -6,7 +6,7 @@ A terminal-based database client built with [Bubble Tea](https://github.com/char
 
 ## Demo
 
-See `demo/demo.mov` for a demonstration of the current functionality.
+![Demo](demo/demo.gif)
 
 ## Installation
 
