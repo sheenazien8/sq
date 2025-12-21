@@ -8,7 +8,7 @@ no clutter, just efficient querying inside terminal but with the beautifull UI
 
 ## Demo
 
-![Demo](demo/demo.gif)
+https://youtu.be/75TUZbeAte8
 
 ## Installation
 
