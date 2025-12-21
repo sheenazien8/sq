@@ -2,6 +2,7 @@ package app
 
 import (
 	"github.com/sheenazien8/db-client-tui/config"
+	"github.com/sheenazien8/db-client-tui/drivers"
 	"github.com/sheenazien8/db-client-tui/ui/filter"
 	modalcreateconnection "github.com/sheenazien8/db-client-tui/ui/modal-create-connection"
 	modalexit "github.com/sheenazien8/db-client-tui/ui/modal-exit"
@@ -38,6 +39,14 @@ type Model struct {
 	allRows     []table.Row
 	columns     []table.Column
 	columnNames []string
+
+	// Database connections
+	dbConnections map[string]drivers.Driver
+
+	// Track current table context for reloading with filters
+	currentConnection string
+	currentDatabase   string
+	currentTable      string
 
 	TerminalWidth  int
 	TerminalHeight int
@@ -89,6 +98,7 @@ func New() Model {
 		ExitModal:             exitModal,
 		CreateConnectionModal: createConnectionModal,
 		Focus:                 FocusSidebar,
+		dbConnections:         make(map[string]drivers.Driver),
 		themeIndex:            themeIdx,
 		config:                cfg,
 	}

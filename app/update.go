@@ -2,9 +2,11 @@ package app
 
 import (
 	"fmt"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sheenazien8/db-client-tui/drivers"
 	"github.com/sheenazien8/db-client-tui/logger"
 	"github.com/sheenazien8/db-client-tui/storage"
 	"github.com/sheenazien8/db-client-tui/ui/filter"
@@ -20,6 +22,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 
+	case sidebar.ConnectionSelectedMsg:
+		logger.Debug("Connection selected", map[string]any{
+			"name": msg.ConnectionName,
+			"type": msg.ConnectionType,
+			"url":  msg.ConnectionURL,
+		})
+
+		// Connect to database and load tables
+		err := m.connectToDatabase(msg.ConnectionName, msg.ConnectionType, msg.ConnectionURL)
+		if err != nil {
+			logger.Error("Failed to connect to database", map[string]any{
+				"connection": msg.ConnectionName,
+				"error":      err.Error(),
+			})
+			// TODO: Show error message to user
+			return m, nil
+		}
+
+		// Sidebar is updated via updateSidebarConnection
+
+		return m, nil
+
 	case sidebar.TableSelectedMsg:
 		logger.Debug("Table selected", map[string]any{
 			"connection": msg.ConnectionName,
@@ -33,10 +57,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// TODO: Load actual table data from database
-		// For now, use mock data
-		m.columns, m.allRows = getTableData()
-		m.columnNames = getColumnNames(m.columns)
+		// Load actual table data from database
+		err := m.loadTableData(msg.ConnectionName, msg.TableName)
+		if err != nil {
+			logger.Error("Failed to load table data", map[string]any{
+				"connection": msg.ConnectionName,
+				"table":      msg.TableName,
+				"error":      err.Error(),
+			})
+			// TODO: Show error message to user
+			return m, nil
+		}
 
 		// Initialize filter if not already done
 		if m.Filter.GetFilter() == nil && len(m.columnNames) == 0 {
@@ -57,6 +88,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Focus = FocusMain
 		m.Sidebar.SetFocused(false)
 		m.Tabs.SetFocused(true)
+		m = m.updateFooter()
 
 		return m, nil
 
@@ -73,7 +105,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		footerStyle := t.Footer.Width(m.TerminalWidth)
 
 		m.HeaderStyle = headerStyle.Render("DB Client TUI [" + t.Name + "]")
-		m.FooterStyle = footerStyle.Render("Tab: Switch | /: Filter | T: Theme | q: Quit")
+		m.FooterStyle = footerStyle.Render(m.getFooterHelp())
 
 		headerHeight := lipgloss.Height(m.HeaderStyle)
 		footerHeight := lipgloss.Height(m.FooterStyle)
@@ -116,6 +148,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					m.Focus = FocusSidebar
 					m.Sidebar.SetFocused(true)
+					m = m.updateFooter()
 				}
 			}
 			return m, tea.Batch(cmds...)
@@ -129,19 +162,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Check if filter was closed (applied or escaped)
 			if !m.Filter.Visible() {
 				f := m.Filter.GetFilter()
-				
+
 				// If filter was applied (Enter pressed), add it to the tab
 				if f != nil && (m.Filter.Active() || m.Filter.Active() != prevActive) {
 					m.Tabs.AddActiveTabFilter(*f)
 					m = m.applyFilterToActiveTab()
 				}
-				
+
 				// Adjust table size now that filter is hidden
 				m = m.updateTabSize()
 				// Return focus to tabs
 				m.Focus = FocusMain
 				m.Sidebar.SetFocused(false)
 				m.Tabs.SetFocused(true)
+				m = m.updateFooter()
 			}
 			return m, tea.Batch(cmds...)
 		}
@@ -179,6 +213,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.Focus = FocusSidebar
 				m.Sidebar.SetFocused(true)
+				m = m.updateFooter()
 			}
 			return m, tea.Batch(cmds...)
 		}
@@ -188,13 +223,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.Focus == FocusSidebar || m.Focus == FocusMain {
 				m.ExitModal.Show()
 				m.Focus = FocusExitModal
+				m = m.updateFooter()
 			}
 
 		case "/", "f":
 			if m.Focus == FocusMain && m.Tabs.HasTabs() {
 				// Get active tab's column names
 				_, _, columnNames := m.Tabs.GetActiveTabData()
-				
+
 				if columnNames != nil {
 					// Update filter columns based on active tab
 					m.Filter = filter.New(columnNames)
@@ -202,6 +238,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.Filter.SetVisible(true)
 					m.Focus = FocusFilter
 					m = m.updateTabSize()
+					m = m.updateFooter()
 				}
 			} else {
 				m.Sidebar, cmd = m.Sidebar.Update(msg)
@@ -212,6 +249,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.Focus == FocusSidebar {
 				m.CreateConnectionModal.Show()
 				m.Focus = FocusCreateConnectionModal
+				m = m.updateFooter()
 			}
 		case "tab":
 			// Only allow switching to main table if tabs are open
@@ -224,6 +262,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.Focus = FocusMain
 					m.Sidebar.SetFocused(false)
 					m.Tabs.SetFocused(true)
+					m = m.updateFooter()
 				}
 			} else {
 				logger.Debug("Focus changed", map[string]any{
@@ -233,6 +272,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Focus = FocusSidebar
 				m.Sidebar.SetFocused(true)
 				m.Tabs.SetFocused(false)
+				m = m.updateFooter()
 			}
 
 		case "T":
@@ -266,60 +306,203 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-// applyFilterToActiveTab filters the table rows in the active tab based on current filters
+// connectToDatabase creates a driver instance and connects to the database
+func (m *Model) connectToDatabase(name, connType, url string) error {
+	var driver drivers.Driver
+
+	switch connType {
+	case "mysql":
+		driver = &drivers.MySQL{}
+	default:
+		return fmt.Errorf("unsupported database type: %s", connType)
+	}
+
+	err := driver.Connect(url)
+	if err != nil {
+		return err
+	}
+
+	// Extract database name from URL for MySQL
+	dbName := extractDatabaseName(url, connType)
+
+	// Get tables from database
+	tables, err := driver.GetTables(dbName)
+	if err != nil {
+		return err
+	}
+
+	// Store the driver connection
+	m.dbConnections[name] = driver
+
+	// Update sidebar with real tables and connected status
+	m.Sidebar.UpdateConnection(name, tables[dbName], true)
+
+	return nil
+}
+
+// extractDatabaseName extracts the database name from connection URL
+func extractDatabaseName(url, connType string) string {
+	switch connType {
+	case "mysql":
+		// For MySQL URLs like "user:pass@tcp(host:port)/database"
+		parts := strings.Split(url, "/")
+		if len(parts) > 1 {
+			// Remove query parameters if any
+			dbPart := strings.Split(parts[len(parts)-1], "?")[0]
+			return dbPart
+		}
+	}
+	return ""
+}
+
+// loadTableData loads table data from the database connection
+func (m *Model) loadTableData(connectionName, tableName string) error {
+	driver, exists := m.dbConnections[connectionName]
+	if !exists {
+		return fmt.Errorf("no active connection for %s", connectionName)
+	}
+
+	// Extract database name from connection
+	connections := m.Sidebar.GetConnections()
+	var dbName string
+	for _, conn := range connections {
+		if conn.Name == connectionName {
+			dbName = extractDatabaseName(conn.Host, conn.Type)
+			break
+		}
+	}
+
+	if dbName == "" {
+		return fmt.Errorf("could not extract database name from connection")
+	}
+
+	// Store current context for filter reloading
+	m.currentConnection = connectionName
+	m.currentDatabase = dbName
+	m.currentTable = tableName
+
+	// Get table columns
+	columnsData, err := driver.GetTableColumns(dbName, tableName)
+	if err != nil {
+		return err
+	}
+
+	// Convert columns to table.Column format
+	m.columns = make([]table.Column, len(columnsData))
+	m.columnNames = make([]string, len(columnsData))
+	for i, col := range columnsData {
+		m.columns[i] = table.Column{
+			Title: col[0], // column name
+			Width: max(10, len(col[0])+2),
+		}
+		m.columnNames[i] = col[0]
+	}
+
+	// Get table data
+	data, err := driver.GetTableData(dbName, tableName)
+	if err != nil {
+		return err
+	}
+
+	// Convert data to table.Row format (skip header row since we have columns)
+	m.allRows = make([]table.Row, len(data)-1)
+	for i := 1; i < len(data); i++ {
+		m.allRows[i-1] = table.Row(data[i])
+	}
+
+	return nil
+}
+
+// applyFilterToActiveTab reloads table data from database with filters
 func (m Model) applyFilterToActiveTab() Model {
 	activeTab := m.Tabs.ActiveTab()
 	if activeTab == nil {
 		return m
 	}
 
-	// Get the active tab's original data
-	allRows, _, columnNames := m.Tabs.GetActiveTabData()
-	if allRows == nil {
+	filters := m.Tabs.GetActiveTabFilters()
+
+	// Get connection and table info from tab name (format: "connection.table")
+	tabName := m.Tabs.GetActiveTabName()
+	parts := strings.Split(tabName, ".")
+	if len(parts) != 2 {
+		logger.Error("Invalid tab name format", map[string]any{"tab": tabName})
 		return m
 	}
 
-	filters := m.Tabs.GetActiveTabFilters()
-	
-	if len(filters) == 0 {
-		logger.Debug("Filter cleared", map[string]any{"total_rows": len(allRows)})
-		// Reset to original data
-		if tableModel, ok := activeTab.Content.(table.Model); ok {
-			tableModel.SetRows(allRows)
-			m.Tabs.UpdateActiveTabContent(tableModel)
-		}
-	} else {
-		logger.Debug("Filters applied", map[string]any{
-			"filter_count": len(filters),
-		})
-		
-		// Convert to [][]string for filtering
-		rows := make([][]string, len(allRows))
-		for i, row := range allRows {
-			rows[i] = []string(row)
-		}
-		
-		// Apply all filters sequentially (AND logic)
-		filtered := rows
-		for _, f := range filters {
-			filtered = filter.FilterRows(filtered, columnNames, &f)
-		}
-		
-		tableRows := make([]table.Row, len(filtered))
-		for i, row := range filtered {
-			tableRows[i] = table.Row(row)
-		}
-		
-		logger.Debug("Filter result", map[string]any{
-			"original_rows": len(allRows),
-			"filtered_rows": len(tableRows),
-		})
-		
-		if tableModel, ok := activeTab.Content.(table.Model); ok {
-			tableModel.SetRows(tableRows)
-			m.Tabs.UpdateActiveTabContent(tableModel)
+	connectionName := parts[0]
+	tableName := parts[1]
+
+	driver, exists := m.dbConnections[connectionName]
+	if !exists {
+		logger.Error("No active connection", map[string]any{"connection": connectionName})
+		return m
+	}
+
+	// Extract database name
+	connections := m.Sidebar.GetConnections()
+	var dbName string
+	for _, conn := range connections {
+		if conn.Name == connectionName {
+			dbName = extractDatabaseName(conn.Host, conn.Type)
+			break
 		}
 	}
+
+	if dbName == "" {
+		logger.Error("Could not extract database name", map[string]any{})
+		return m
+	}
+
+	var data [][]string
+	var err error
+
+	if len(filters) == 0 {
+		logger.Debug("Loading data without filters", map[string]any{})
+		// No filters - use regular query
+		data, err = driver.GetTableData(dbName, tableName)
+	} else {
+		logger.Debug("Loading data with filters", map[string]any{
+			"filter_count": len(filters),
+		})
+
+		// Convert filter.Filter to drivers.FilterCondition
+		driverFilters := make([]drivers.FilterCondition, len(filters))
+		for i, f := range filters {
+			driverFilters[i] = drivers.FilterCondition{
+				Column:   f.Column,
+				Operator: string(f.Operator),
+				Value:    f.Value,
+			}
+		}
+
+		// Load data with filters
+		data, err = driver.GetTableDataWithFilter(dbName, tableName, driverFilters)
+	}
+
+	if err != nil {
+		logger.Error("Failed to load filtered data", map[string]any{
+			"error": err.Error(),
+		})
+		return m
+	}
+
+	// Convert data to table.Row format (skip header row)
+	tableRows := make([]table.Row, len(data)-1)
+	for i := 1; i < len(data); i++ {
+		tableRows[i-1] = table.Row(data[i])
+	}
+
+	logger.Debug("Filter result", map[string]any{
+		"filtered_rows": len(tableRows),
+	})
+
+	// Update tab with filtered data
+	if tableModel, ok := activeTab.Content.(table.Model); ok {
+		tableModel.SetRows(tableRows)
+		m.Tabs.UpdateActiveTabContent(tableModel)
+	}
+
 	return m
 }
 
@@ -327,7 +510,14 @@ func (m Model) applyFilterToActiveTab() Model {
 func (m Model) updateStyles() Model {
 	t := theme.Current
 	m.HeaderStyle = t.Header.Width(m.TerminalWidth).Render("DB Client TUI [" + t.Name + "]")
-	m.FooterStyle = t.Footer.Width(m.TerminalWidth).Render("Tab: Switch | /: Filter | T: Theme | q: Quit")
+	m.FooterStyle = t.Footer.Width(m.TerminalWidth).Render(m.getFooterHelp())
+	return m
+}
+
+// updateFooter refreshes just the footer with current help text
+func (m Model) updateFooter() Model {
+	t := theme.Current
+	m.FooterStyle = t.Footer.Width(m.TerminalWidth).Render(m.getFooterHelp())
 	return m
 }
 
@@ -342,6 +532,27 @@ func (m Model) updateTabSize() Model {
 	tableHeight := contentHeight - filterBarHeight - 2
 	m.Tabs.SetSize(tableWidth, tableHeight)
 	return m
+}
+
+// getFooterHelp returns context-sensitive help text based on current focus
+func (m Model) getFooterHelp() string {
+	switch m.Focus {
+	case FocusSidebar:
+		return "j/k: Navigate | Enter: Select/Connect | n: New Connection | Tab: Switch | T: Theme | q: Quit"
+	case FocusMain:
+		if m.Tabs.HasTabs() {
+			return "j/k/h/l: Navigate | PgUp/PgDn: Page | /: Filter | C: Clear Filter | Tab: Switch | T: Theme | q: Quit"
+		}
+		return "Tab: Switch | T: Theme | q: Quit"
+	case FocusFilter:
+		return "Tab/h/l: Switch Field | j/k: Navigate Options | Enter: Apply | Esc: Cancel | Ctrl+C: Clear"
+	case FocusExitModal:
+		return "y: Yes | n/Esc: No | h/l: Switch Button"
+	case FocusCreateConnectionModal:
+		return "Tab: Next Field | Shift+Tab: Previous Field | Enter: Submit | Esc: Cancel"
+	default:
+		return "Tab: Switch | T: Theme | q: Quit"
+	}
 }
 
 // getColumnNames extracts column names from columns
