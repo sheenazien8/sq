@@ -6,9 +6,9 @@ import (
 	"os"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/sheenazien8/db-client-tui/app"
-	"github.com/sheenazien8/db-client-tui/logger"
-	"github.com/sheenazien8/db-client-tui/storage"
+	"github.com/sheenazien8/sq/app"
+	"github.com/sheenazien8/sq/logger"
+	"github.com/sheenazien8/sq/storage"
 )
 
 func main() {

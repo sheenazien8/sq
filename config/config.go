@@ -24,7 +24,7 @@ func configDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(home, ".config", "db-client-tui"), nil
+	return filepath.Join(home, ".config", "sq"), nil
 }
 
 // configPath returns the config file path

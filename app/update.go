@@ -7,16 +7,16 @@ import (
 	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/sheenazien8/db-client-tui/drivers"
-	"github.com/sheenazien8/db-client-tui/logger"
-	"github.com/sheenazien8/db-client-tui/storage"
-	"github.com/sheenazien8/db-client-tui/ui/filter"
-	"github.com/sheenazien8/db-client-tui/ui/modal"
-	queryeditor "github.com/sheenazien8/db-client-tui/ui/query-editor"
-	"github.com/sheenazien8/db-client-tui/ui/sidebar"
-	"github.com/sheenazien8/db-client-tui/ui/tab"
-	"github.com/sheenazien8/db-client-tui/ui/table"
-	"github.com/sheenazien8/db-client-tui/ui/theme"
+	"github.com/sheenazien8/sq/drivers"
+	"github.com/sheenazien8/sq/logger"
+	"github.com/sheenazien8/sq/storage"
+	"github.com/sheenazien8/sq/ui/filter"
+	"github.com/sheenazien8/sq/ui/modal"
+	queryeditor "github.com/sheenazien8/sq/ui/query-editor"
+	"github.com/sheenazien8/sq/ui/sidebar"
+	"github.com/sheenazien8/sq/ui/tab"
+	"github.com/sheenazien8/sq/ui/table"
+	"github.com/sheenazien8/sq/ui/theme"
 )
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -772,7 +772,7 @@ func (m Model) applyFilterToActiveTab() Model {
 // updateStyles refreshes the header and footer styles after theme change
 func (m Model) updateStyles() Model {
 	t := theme.Current
-	m.HeaderStyle = t.Header.Width(m.TerminalWidth).Render("DB Client TUI [" + t.Name + "]")
+	m.HeaderStyle = t.Header.Width(m.TerminalWidth).Render("sq [" + t.Name + "]")
 	m.FooterStyle = t.Footer.Width(m.TerminalWidth).Render(m.getFooterHelp())
 	return m
 }

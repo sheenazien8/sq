@@ -1,16 +1,16 @@
 package app
 
 import (
-	"github.com/sheenazien8/db-client-tui/config"
-	"github.com/sheenazien8/db-client-tui/drivers"
-	"github.com/sheenazien8/db-client-tui/ui/filter"
-	modalcellpreview "github.com/sheenazien8/db-client-tui/ui/modal-cell-preview"
-	modalcreateconnection "github.com/sheenazien8/db-client-tui/ui/modal-create-connection"
-	modalexit "github.com/sheenazien8/db-client-tui/ui/modal-exit"
-	"github.com/sheenazien8/db-client-tui/ui/sidebar"
-	"github.com/sheenazien8/db-client-tui/ui/tab"
-	"github.com/sheenazien8/db-client-tui/ui/table"
-	"github.com/sheenazien8/db-client-tui/ui/theme"
+	"github.com/sheenazien8/sq/config"
+	"github.com/sheenazien8/sq/drivers"
+	"github.com/sheenazien8/sq/ui/filter"
+	modalcellpreview "github.com/sheenazien8/sq/ui/modal-cell-preview"
+	modalcreateconnection "github.com/sheenazien8/sq/ui/modal-create-connection"
+	modalexit "github.com/sheenazien8/sq/ui/modal-exit"
+	"github.com/sheenazien8/sq/ui/sidebar"
+	"github.com/sheenazien8/sq/ui/tab"
+	"github.com/sheenazien8/sq/ui/table"
+	"github.com/sheenazien8/sq/ui/theme"
 )
 
 // Re-export table types for convenience

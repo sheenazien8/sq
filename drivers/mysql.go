@@ -6,7 +6,7 @@ import (
 	"strconv"
 
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/sheenazien8/db-client-tui/logger"
+	"github.com/sheenazien8/sq/logger"
 	"github.com/xo/dburl"
 )
 

@@ -5,8 +5,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/sheenazien8/db-client-tui/ui/modal"
-	"github.com/sheenazien8/db-client-tui/ui/theme"
+	"github.com/sheenazien8/sq/ui/modal"
+	"github.com/sheenazien8/sq/ui/theme"
 )
 
 // Model wraps the generic modal with cell preview content

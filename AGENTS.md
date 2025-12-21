@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**db-client-tui** is a terminal-based database client built with the [Bubble Tea](https://github.com/charmbracelet/bubbletea) TUI framework for Go. The project implements a multi-pane layout with keyboard-driven navigation following vim-like patterns.
+**sq** is a terminal-based database client built with the [Bubble Tea](https://github.com/charmbracelet/bubbletea) TUI framework for Go. The project implements a multi-pane layout with keyboard-driven navigation following vim-like patterns.
 
 **Status**: Early development - currently displays mock data. Planned support for PostgreSQL, MySQL, and SQLite.
 
@@ -21,8 +21,8 @@ go run .
 
 ### Building
 ```bash
-go build -o db-client-tui
-./db-client-tui
+go build -o sq
+./sq
 ```
 
 ### Dependencies
@@ -38,7 +38,7 @@ go mod tidy
 ## Project Structure
 
 ```
-db-client-tui/
+sq/
 ├── main.go              # Entry point, initializes Bubble Tea program
 ├── app/                 # Main application logic (Bubble Tea Model-View-Update)
 │   ├── init.go          # Init() - initialization command
@@ -46,7 +46,7 @@ db-client-tui/
 │   ├── update.go        # Update() - handles messages and input
 │   └── view.go          # View() - renders the UI
 ├── config/              # Application configuration
-│   └── config.go        # Config loading/saving (~/.config/db-client-tui/config.json)
+│   └── config.go        # Config loading/saving (~/.config/sq/config.json)
 └── ui/                  # UI components (separate Bubble Tea models)
     ├── sidebar/         # Database list sidebar
     ├── table/           # Scrollable table widget
@@ -155,8 +155,8 @@ import (
 Example from `app/model.go`:
 ```go
 import (
-    "github.com/sheenazien8/db-client-tui/config"
-    "github.com/sheenazien8/db-client-tui/ui/filter"
+"github.com/sheenazien8/sq/config"
+"github.com/sheenazien8/sq/ui/filter"
     // ...
 )
 ```
@@ -230,7 +230,7 @@ lipgloss.Height(renderedString)  // Get line count
 ## Configuration
 
 ### Config File Location
-`~/.config/db-client-tui/config.json`
+`~/.config/sq/config.json`
 
 ### Config Structure
 ```go

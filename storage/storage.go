@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/sheenazien8/db-client-tui/drivers"
+	"github.com/sheenazien8/sq/drivers"
 	_ "modernc.org/sqlite"
 )
 
@@ -51,7 +51,7 @@ func storagePath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(home, ".config", "db-client-tui")
+	dir := filepath.Join(home, ".config", "sq")
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return "", err
 	}

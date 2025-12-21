@@ -2,8 +2,8 @@ package modalexit
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/sheenazien8/db-client-tui/logger"
-	"github.com/sheenazien8/db-client-tui/ui/modal"
+	"github.com/sheenazien8/sq/logger"
+	"github.com/sheenazien8/sq/ui/modal"
 )
 
 // Model wraps the generic modal with exit confirmation content

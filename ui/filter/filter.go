@@ -8,7 +8,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/sheenazien8/db-client-tui/ui/theme"
+	"github.com/sheenazien8/sq/ui/theme"
 )
 
 // Operator represents a filter operator

@@ -4,9 +4,9 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/sheenazien8/db-client-tui/logger"
-	"github.com/sheenazien8/db-client-tui/ui/modal"
-	"github.com/sheenazien8/db-client-tui/ui/theme"
+	"github.com/sheenazien8/sq/logger"
+	"github.com/sheenazien8/sq/ui/modal"
+	"github.com/sheenazien8/sq/ui/theme"
 )
 
 type FocusField int

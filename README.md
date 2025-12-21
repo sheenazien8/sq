@@ -1,4 +1,4 @@
-# DB Client TUI
+# sq
 
 A terminal-based database client built with [Bubble Tea](https://github.com/charmbracelet/bubbletea) TUI framework for Go. Features a multi-pane layout with keyboard-driven navigation following vim-like patterns.
 
@@ -21,8 +21,8 @@ go mod tidy
 
 ### Building
 ```bash
-go build -o db-client-tui
-./db-client-tui
+go build -o sq
+./sq
 ```
 
 ### Running
@@ -182,7 +182,7 @@ The query editor features full **vim-mode** support for efficient editing.
 ## Project Structure
 
 ```
-db-client-tui/
+sq/
 ├── main.go              # Entry point, initializes Bubble Tea program
 ├── app/                 # Main application logic (Bubble Tea Model-View-Update)
 │   ├── init.go          # Init() - initialization command
@@ -227,7 +227,7 @@ Each UI component (sidebar, table, filter, modal) follows the same pattern with 
 
 ## Configuration
 
-Configuration is saved to `~/.config/db-client-tui/config.json`:
+Configuration is saved to `~/.config/sq/config.json`:
 
 ```json
 {
@@ -239,7 +239,7 @@ Available themes: default, dracula, nord, gruvbox, tokyo-night, catppuccin, mono
 
 ## Database Connections
 
-Connections are stored in `~/.config/db-client-tui/connections.json`.
+Connections are stored in `~/.config/sq/connections.json`.
 
 ### Supported Databases
 - **MySQL** - Full support including:
