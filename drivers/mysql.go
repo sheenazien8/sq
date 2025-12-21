@@ -263,3 +263,243 @@ func formatSQLValue(val interface{}) string {
 		return fmt.Sprintf("%v", v)
 	}
 }
+
+// GetTableStructure returns complete table structure including columns, indexes, relations, and triggers
+func (db *MySQL) GetTableStructure(database, table string) (*TableStructure, error) {
+	columns, err := db.GetColumnInfo(database, table)
+	if err != nil {
+		return nil, err
+	}
+
+	indexes, err := db.GetIndexInfo(database, table)
+	if err != nil {
+		return nil, err
+	}
+
+	relations, err := db.GetRelationInfo(database, table)
+	if err != nil {
+		return nil, err
+	}
+
+	triggers, err := db.GetTriggerInfo(database, table)
+	if err != nil {
+		return nil, err
+	}
+
+	return &TableStructure{
+		Columns:   columns,
+		Indexes:   indexes,
+		Relations: relations,
+		Triggers:  triggers,
+	}, nil
+}
+
+// GetColumnInfo returns detailed column information for a table
+func (db *MySQL) GetColumnInfo(database, table string) ([]ColumnInfo, error) {
+	query := `
+		SELECT 
+			COLUMN_NAME,
+			COLUMN_TYPE,
+			IS_NULLABLE,
+			COLUMN_KEY,
+			COLUMN_DEFAULT,
+			EXTRA,
+			COLUMN_COMMENT
+		FROM information_schema.COLUMNS 
+		WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? 
+		ORDER BY ORDINAL_POSITION`
+
+	rows, err := db.Connection.Query(query, database, table)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var columns []ColumnInfo
+	for rows.Next() {
+		var col ColumnInfo
+		var isNullable, columnKey string
+		var defaultValue, extra, comment sql.NullString
+
+		if err := rows.Scan(&col.Name, &col.DataType, &isNullable, &columnKey, &defaultValue, &extra, &comment); err != nil {
+			return nil, err
+		}
+
+		col.Nullable = isNullable == "YES"
+		col.IsPrimaryKey = columnKey == "PRI"
+		col.DefaultValue = defaultValue.String
+		col.Extra = extra.String
+		col.Comment = comment.String
+
+		columns = append(columns, col)
+	}
+
+	return columns, rows.Err()
+}
+
+// GetIndexInfo returns index information for a table
+func (db *MySQL) GetIndexInfo(database, table string) ([]IndexInfo, error) {
+	query := `
+		SELECT 
+			INDEX_NAME,
+			GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) as COLUMNS,
+			NOT NON_UNIQUE as IS_UNIQUE,
+			INDEX_NAME = 'PRIMARY' as IS_PRIMARY,
+			INDEX_TYPE
+		FROM information_schema.STATISTICS 
+		WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
+		GROUP BY INDEX_NAME, NON_UNIQUE, INDEX_TYPE
+		ORDER BY INDEX_NAME`
+
+	rows, err := db.Connection.Query(query, database, table)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var indexes []IndexInfo
+	for rows.Next() {
+		var idx IndexInfo
+		var columnsStr string
+		var isUnique, isPrimary bool
+
+		if err := rows.Scan(&idx.Name, &columnsStr, &isUnique, &isPrimary, &idx.Type); err != nil {
+			return nil, err
+		}
+
+		idx.Columns = splitColumns(columnsStr)
+		idx.IsUnique = isUnique
+		idx.IsPrimary = isPrimary
+
+		indexes = append(indexes, idx)
+	}
+
+	return indexes, rows.Err()
+}
+
+// GetRelationInfo returns foreign key relationships for a table
+func (db *MySQL) GetRelationInfo(database, table string) ([]RelationInfo, error) {
+	query := `
+		SELECT 
+			CONSTRAINT_NAME,
+			COLUMN_NAME,
+			REFERENCED_TABLE_NAME,
+			REFERENCED_COLUMN_NAME
+		FROM information_schema.KEY_COLUMN_USAGE
+		WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND REFERENCED_TABLE_NAME IS NOT NULL
+		ORDER BY CONSTRAINT_NAME, ORDINAL_POSITION`
+
+	rows, err := db.Connection.Query(query, database, table)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var relations []RelationInfo
+	for rows.Next() {
+		var rel RelationInfo
+
+		if err := rows.Scan(&rel.Name, &rel.Column, &rel.ReferencedTable, &rel.ReferencedColumn); err != nil {
+			return nil, err
+		}
+
+		relations = append(relations, rel)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Get ON UPDATE and ON DELETE actions
+	for i := range relations {
+		actionQuery := `
+			SELECT UPDATE_RULE, DELETE_RULE
+			FROM information_schema.REFERENTIAL_CONSTRAINTS
+			WHERE CONSTRAINT_SCHEMA = ? AND TABLE_NAME = ? AND CONSTRAINT_NAME = ?`
+
+		var onUpdate, onDelete string
+		err := db.Connection.QueryRow(actionQuery, database, table, relations[i].Name).Scan(&onUpdate, &onDelete)
+		if err == nil {
+			relations[i].OnUpdate = onUpdate
+			relations[i].OnDelete = onDelete
+		}
+	}
+
+	return relations, nil
+}
+
+// GetTriggerInfo returns trigger information for a table
+func (db *MySQL) GetTriggerInfo(database, table string) ([]TriggerInfo, error) {
+	query := `
+		SELECT 
+			TRIGGER_NAME,
+			EVENT_MANIPULATION,
+			ACTION_TIMING,
+			ACTION_STATEMENT,
+			EVENT_OBJECT_TABLE
+		FROM information_schema.TRIGGERS
+		WHERE TRIGGER_SCHEMA = ? AND EVENT_OBJECT_TABLE = ?
+		ORDER BY TRIGGER_NAME`
+
+	rows, err := db.Connection.Query(query, database, table)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var triggers []TriggerInfo
+	for rows.Next() {
+		var trig TriggerInfo
+
+		if err := rows.Scan(&trig.Name, &trig.Event, &trig.Timing, &trig.Statement, &trig.Table); err != nil {
+			return nil, err
+		}
+
+		triggers = append(triggers, trig)
+	}
+
+	return triggers, rows.Err()
+}
+
+// splitColumns splits a comma-separated column string into a slice
+func splitColumns(s string) []string {
+	if s == "" {
+		return nil
+	}
+	var columns []string
+	for _, col := range splitString(s, ',') {
+		columns = append(columns, trimSpace(col))
+	}
+	return columns
+}
+
+// splitString splits a string by a separator
+func splitString(s string, sep rune) []string {
+	var result []string
+	var current string
+	for _, r := range s {
+		if r == sep {
+			result = append(result, current)
+			current = ""
+		} else {
+			current += string(r)
+		}
+	}
+	if current != "" {
+		result = append(result, current)
+	}
+	return result
+}
+
+// trimSpace removes leading and trailing whitespace
+func trimSpace(s string) string {
+	start := 0
+	end := len(s)
+	for start < end && (s[start] == ' ' || s[start] == '\t') {
+		start++
+	}
+	for end > start && (s[end-1] == ' ' || s[end-1] == '\t') {
+		end--
+	}
+	return s[start:end]
+}

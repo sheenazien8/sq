@@ -151,6 +151,18 @@ func (m Model) HasActiveDatabase() bool {
 	return m.ActiveDatabase() != nil
 }
 
+// SelectedTable returns the name of the currently selected table (if cursor is on a table)
+func (m Model) SelectedTable() string {
+	selectedItem := m.SelectedItem()
+	if selectedItem != nil && selectedItem.Level == 1 {
+		conn := m.connections[selectedItem.ConnectionIndex]
+		if selectedItem.TableIndex >= 0 && selectedItem.TableIndex < len(conn.Tables) {
+			return conn.Tables[selectedItem.TableIndex].Name
+		}
+	}
+	return ""
+}
+
 // SetDatabases updates the database list
 func (m *Model) SetDatabases(databases []Connection) {
 	m.connections = databases

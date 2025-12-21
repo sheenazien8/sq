@@ -18,4 +18,11 @@ type Driver interface {
 	GetTableColumns(database, table string) ([][]string, error)
 	GetTableData(database, table string) ([][]string, error)
 	GetTableDataWithFilter(database, table string, filters []FilterCondition) ([][]string, error)
+
+	// Table structure methods
+	GetTableStructure(database, table string) (*TableStructure, error)
+	GetColumnInfo(database, table string) ([]ColumnInfo, error)
+	GetIndexInfo(database, table string) ([]IndexInfo, error)
+	GetRelationInfo(database, table string) ([]RelationInfo, error)
+	GetTriggerInfo(database, table string) ([]TriggerInfo, error)
 }

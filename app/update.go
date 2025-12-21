@@ -13,6 +13,7 @@ import (
 	"github.com/sheenazien8/db-client-tui/ui/filter"
 	"github.com/sheenazien8/db-client-tui/ui/modal"
 	"github.com/sheenazien8/db-client-tui/ui/sidebar"
+	"github.com/sheenazien8/db-client-tui/ui/tab"
 	"github.com/sheenazien8/db-client-tui/ui/table"
 	"github.com/sheenazien8/db-client-tui/ui/theme"
 )
@@ -345,6 +346,44 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
+		case "d":
+			// Show table structure in a new tab
+			if m.Focus == FocusMain && m.Tabs.HasTabs() {
+				err := m.loadTableStructure()
+				if err != nil {
+					logger.Error("Failed to load table structure", map[string]any{"error": err.Error()})
+				}
+				return m, nil
+			} else if m.Focus == FocusSidebar {
+				// Load structure for selected table in sidebar
+				activeDB := m.Sidebar.ActiveDatabase()
+				if activeDB != nil && activeDB.Connected {
+					selectedTable := m.Sidebar.SelectedTable()
+					if selectedTable != "" {
+						m.currentConnection = activeDB.Name
+						connections := m.Sidebar.GetConnections()
+						for _, conn := range connections {
+							if conn.Name == activeDB.Name {
+								m.currentDatabase = extractDatabaseName(conn.Host, conn.Type)
+								break
+							}
+						}
+						m.currentTable = selectedTable
+						err := m.loadTableStructure()
+						if err != nil {
+							logger.Error("Failed to load table structure", map[string]any{"error": err.Error()})
+						} else {
+							// Switch focus to main area
+							m.Focus = FocusMain
+							m.Sidebar.SetFocused(false)
+							m.Tabs.SetFocused(true)
+							m = m.updateFooter()
+						}
+						return m, nil
+					}
+				}
+			}
+
 		case "s", "S":
 			m.sidebarCollapsed = !m.sidebarCollapsed
 			// Recalculate layout after toggling sidebar
@@ -603,13 +642,17 @@ func (m Model) updateTabSize() Model {
 func (m Model) getFooterHelp() string {
 	switch m.Focus {
 	case FocusSidebar:
-		return "j/k: Navigate | Enter: Select/Connect | n: New Connection | s: Toggle Sidebar | Tab: Switch | T: Theme | q: Quit"
+		return "j/k: Navigate | Enter: Select/Connect | d: Structure | n: New Connection | s: Toggle Sidebar | Tab: Switch | T: Theme | q: Quit"
 	case FocusMain:
 		if m.Tabs.HasTabs() {
-			if !m.sidebarCollapsed {
-				return "j/k/h/l: Navigate | PgUp/PgDn: Page | y: Yank Cell | p: Preview Cell | /: Filter | C: Clear Filter | s: Toggle Sidebar | Tab: Switch | T: Theme | q: Quit"
+			tabType := m.Tabs.GetActiveTabType()
+			if tabType == tab.TabTypeStructure {
+				return "j/k/h/l: Navigate | 1-4: Sections | Tab: Next Section | []: Switch Tab | Ctrl+W: Close | s: Toggle Sidebar | q: Quit"
 			}
-			return "j/k/h/l: Navigate | PgUp/PgDn: Page | y: Yank Cell | p: Preview Cell | /: Filter | C: Clear Filter | s: Toggle Sidebar | T: Theme | q: Quit"
+			if !m.sidebarCollapsed {
+				return "j/k/h/l: Navigate | d: Structure | y: Yank | p: Preview | /: Filter | C: Clear | []: Switch Tab | s: Toggle Sidebar | q: Quit"
+			}
+			return "j/k/h/l: Navigate | d: Structure | y: Yank | p: Preview | /: Filter | C: Clear | []: Switch Tab | s: Toggle Sidebar | q: Quit"
 		}
 		if !m.sidebarCollapsed {
 			return "s: Toggle Sidebar | Tab: Switch | T: Theme | q: Quit"
@@ -633,6 +676,69 @@ func getColumnNames(columns []table.Column) []string {
 		names[i] = col.Title
 	}
 	return names
+}
+
+// loadTableStructure loads the table structure and opens it in a new tab
+func (m *Model) loadTableStructure() error {
+	// Get connection and table info from current context or active tab
+	connectionName := m.currentConnection
+	tableName := m.currentTable
+	dbName := m.currentDatabase
+
+	// If we have an active tab, try to extract info from it
+	if m.Tabs.HasTabs() {
+		tabName := m.Tabs.GetActiveTabName()
+		parts := strings.Split(tabName, ".")
+		if len(parts) >= 2 {
+			connectionName = parts[0]
+			tableName = parts[1]
+			// Remove [S] prefix if present (structure tab)
+			if strings.HasPrefix(tableName, "[S] ") {
+				tableName = tableName[4:]
+			}
+		}
+	}
+
+	if connectionName == "" || tableName == "" {
+		return fmt.Errorf("no table selected")
+	}
+
+	driver, exists := m.dbConnections[connectionName]
+	if !exists {
+		return fmt.Errorf("no active connection for %s", connectionName)
+	}
+
+	// Get database name if not set
+	if dbName == "" {
+		connections := m.Sidebar.GetConnections()
+		for _, conn := range connections {
+			if conn.Name == connectionName {
+				dbName = extractDatabaseName(conn.Host, conn.Type)
+				break
+			}
+		}
+	}
+
+	if dbName == "" {
+		return fmt.Errorf("could not extract database name from connection")
+	}
+
+	// Get table structure
+	structure, err := driver.GetTableStructure(dbName, tableName)
+	if err != nil {
+		return err
+	}
+
+	// Add structure tab
+	tabName := connectionName + "." + tableName
+	m.Tabs.AddStructureTab(tabName, structure)
+
+	// Set tab dimensions
+	tableWidth := m.ContentWidth - 4
+	tableHeight := m.ContentHeight - 3 - 2
+	m.Tabs.SetSize(tableWidth, tableHeight)
+
+	return nil
 }
 
 // getTableData returns sample table columns and rows
