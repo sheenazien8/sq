@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/sheenazien8/db-client-tui/drivers"
@@ -138,6 +139,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.ExitModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 		m.CreateConnectionModal.SetSize(m.TerminalWidth, m.TerminalHeight)
+		m.CellPreviewModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 
 	case tea.KeyMsg:
 		if m.ExitModal.Visible() {
@@ -221,6 +223,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 		}
 
+		if m.CellPreviewModal.Visible() {
+			m.CellPreviewModal, cmd = m.CellPreviewModal.Update(msg)
+			cmds = append(cmds, cmd)
+
+			// Check if modal was closed
+			if !m.CellPreviewModal.Visible() {
+				m.Focus = FocusMain
+				m.Sidebar.SetFocused(false)
+				m.Tabs.SetFocused(true)
+				m = m.updateFooter()
+			}
+			return m, tea.Batch(cmds...)
+		}
+
 		switch msg.String() {
 		case "ctrl+c", "q":
 			if m.Focus == FocusSidebar || m.Focus == FocusMain {
@@ -297,6 +313,37 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Tabs.ClearActiveTabFilters()
 			m = m.applyFilterToActiveTab()
 			m = m.updateTabSize()
+
+		case "p":
+			if m.Focus == FocusMain && m.Tabs.HasTabs() {
+				// Get the selected cell content
+				activeTab := m.Tabs.ActiveTab()
+				if tableModel, ok := activeTab.Content.(table.Model); ok {
+					cellContent := tableModel.SelectedCell()
+					if cellContent != "" {
+						m.CellPreviewModal.Show(cellContent)
+						m.Focus = FocusCellPreviewModal
+						m = m.updateFooter()
+					}
+				}
+			}
+
+		case "y":
+			if m.Focus == FocusMain && m.Tabs.HasTabs() {
+				// Yank (copy) the selected cell content to clipboard
+				activeTab := m.Tabs.ActiveTab()
+				if tableModel, ok := activeTab.Content.(table.Model); ok {
+					cellContent := tableModel.SelectedCell()
+					if cellContent != "" {
+						err := clipboard.WriteAll(cellContent)
+						if err != nil {
+							logger.Error("Failed to copy to clipboard", map[string]any{"error": err.Error()})
+						} else {
+							logger.Info("Cell content copied to clipboard", map[string]any{"length": len(cellContent)})
+						}
+					}
+				}
+			}
 
 		case "s", "S":
 			m.sidebarCollapsed = !m.sidebarCollapsed
@@ -560,9 +607,9 @@ func (m Model) getFooterHelp() string {
 	case FocusMain:
 		if m.Tabs.HasTabs() {
 			if !m.sidebarCollapsed {
-				return "j/k/h/l: Navigate | PgUp/PgDn: Page | /: Filter | C: Clear Filter | s: Toggle Sidebar | Tab: Switch | T: Theme | q: Quit"
+				return "j/k/h/l: Navigate | PgUp/PgDn: Page | y: Yank Cell | p: Preview Cell | /: Filter | C: Clear Filter | s: Toggle Sidebar | Tab: Switch | T: Theme | q: Quit"
 			}
-			return "j/k/h/l: Navigate | PgUp/PgDn: Page | /: Filter | C: Clear Filter | s: Toggle Sidebar | T: Theme | q: Quit"
+			return "j/k/h/l: Navigate | PgUp/PgDn: Page | y: Yank Cell | p: Preview Cell | /: Filter | C: Clear Filter | s: Toggle Sidebar | T: Theme | q: Quit"
 		}
 		if !m.sidebarCollapsed {
 			return "s: Toggle Sidebar | Tab: Switch | T: Theme | q: Quit"

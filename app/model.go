@@ -4,6 +4,7 @@ import (
 	"github.com/sheenazien8/db-client-tui/config"
 	"github.com/sheenazien8/db-client-tui/drivers"
 	"github.com/sheenazien8/db-client-tui/ui/filter"
+	modalcellpreview "github.com/sheenazien8/db-client-tui/ui/modal-cell-preview"
 	modalcreateconnection "github.com/sheenazien8/db-client-tui/ui/modal-create-connection"
 	modalexit "github.com/sheenazien8/db-client-tui/ui/modal-exit"
 	"github.com/sheenazien8/db-client-tui/ui/sidebar"
@@ -25,6 +26,7 @@ const (
 	FocusFilter
 	FocusExitModal
 	FocusCreateConnectionModal
+	FocusCellPreviewModal
 )
 
 type Model struct {
@@ -34,6 +36,7 @@ type Model struct {
 	Filter                filter.Model
 	ExitModal             modalexit.Model
 	CreateConnectionModal modalcreateconnection.Model
+	CellPreviewModal      modalcellpreview.Model
 	Focus                 Focus
 
 	allRows     []table.Row
@@ -92,6 +95,7 @@ func New() Model {
 
 	exitModal := modalexit.New()
 	createConnectionModal := modalcreateconnection.New()
+	cellPreviewModal := modalcellpreview.New()
 	tabs := tab.New()
 
 	return Model{
@@ -99,6 +103,7 @@ func New() Model {
 		Tabs:                  tabs,
 		ExitModal:             exitModal,
 		CreateConnectionModal: createConnectionModal,
+		CellPreviewModal:      cellPreviewModal,
 		Focus:                 FocusSidebar,
 		dbConnections:         make(map[string]drivers.Driver),
 		themeIndex:            themeIdx,

@@ -47,6 +47,10 @@ func (m Model) View() string {
 		return m.CreateConnectionModal.View()
 	}
 
+	if m.CellPreviewModal.Visible() {
+		return m.CellPreviewModal.View()
+	}
+
 	t := theme.Current
 
 	var sidebarView string

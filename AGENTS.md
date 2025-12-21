@@ -272,6 +272,8 @@ _ = cfg.Save()                     // Creates config dir if needed
 - `L` - Jump to last column
 - `PgUp` / `PgDn` - Page up/down
 - `Home` / `End` - Jump to first/last row
+- `y` - Yank (copy) selected cell content to clipboard
+- `p` - Preview selected cell content
 - `/` / `f` - Open filter dialog
 
 ### Filter Dialog (when open)
