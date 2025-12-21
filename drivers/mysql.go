@@ -503,3 +503,53 @@ func trimSpace(s string) string {
 	}
 	return s[start:end]
 }
+
+// ExecuteQuery executes a raw SQL query and returns the results
+func (db *MySQL) ExecuteQuery(query string) ([][]string, error) {
+	logger.Debug("Executing raw query", map[string]any{
+		"query": query,
+	})
+
+	rows, err := db.Connection.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+
+	var data [][]string
+	// Add header row
+	data = append(data, columns)
+
+	for rows.Next() {
+		values := make([]interface{}, len(columns))
+		valuePtrs := make([]interface{}, len(columns))
+		for i := range columns {
+			valuePtrs[i] = &values[i]
+		}
+
+		if err := rows.Scan(valuePtrs...); err != nil {
+			return nil, err
+		}
+
+		row := make([]string, len(columns))
+		for i, val := range values {
+			if val == nil {
+				row[i] = "NULL"
+			} else {
+				row[i] = formatSQLValue(val)
+			}
+		}
+		data = append(data, row)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return data, nil
+}

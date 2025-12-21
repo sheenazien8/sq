@@ -3,6 +3,7 @@ package app
 import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sheenazien8/db-client-tui/ui/tab"
 	"github.com/sheenazien8/db-client-tui/ui/theme"
 )
 
@@ -85,44 +86,55 @@ func (m Model) View() string {
 
 	// Show tabs if they exist, otherwise show placeholder
 	if m.Tabs.HasTabs() {
-		// Show tabbed interface
-		// Account for border (2 chars on each side = 4 total)
-		contentView := tableBorderStyle.
-			Width(m.ContentWidth - 4).
-			Height(tableHeight).
-			Render(m.Tabs.View())
+		tabType := m.Tabs.GetActiveTabType()
 
-		// Always show filter bar
-		var filterView string
-		if m.Filter.Visible() {
-			// Show filter input (3 lines)
-			filterView = m.Filter.View()
+		// For query editor tabs, don't show filter bar - use full height
+		if tabType == tab.TabTypeQuery {
+			contentView := tableBorderStyle.
+				Width(m.ContentWidth - 4).
+				Height(contentHeight).
+				Render(m.Tabs.View())
+			mainArea = contentView
 		} else {
-			// Show filter status or empty filter bar (1 line with border)
-			activeTabFilters := m.Tabs.GetActiveTabFilters()
+			// Show tabbed interface with filter bar
+			// Account for border (2 chars on each side = 4 total)
+			contentView := tableBorderStyle.
+				Width(m.ContentWidth - 4).
+				Height(tableHeight).
+				Render(m.Tabs.View())
 
-			var message string
-			if len(activeTabFilters) > 0 {
-				// Show all active filters with AND
-				var filterStrings []string
-				for _, f := range activeTabFilters {
-					filterStrings = append(filterStrings, f.Column+" "+string(f.Operator)+" \""+f.Value+"\"")
-				}
-				message = "Filters (" + intToStr(len(activeTabFilters)) + "): " + joinStrings(filterStrings, " AND ") + " | C: clear | /: add"
+			// Always show filter bar for table/structure tabs
+			var filterView string
+			if m.Filter.Visible() {
+				// Show filter input (3 lines)
+				filterView = m.Filter.View()
 			} else {
-				message = "No filter | Press / to filter"
+				// Show filter status or empty filter bar (1 line with border)
+				activeTabFilters := m.Tabs.GetActiveTabFilters()
+
+				var message string
+				if len(activeTabFilters) > 0 {
+					// Show all active filters with AND
+					var filterStrings []string
+					for _, f := range activeTabFilters {
+						filterStrings = append(filterStrings, f.Column+" "+string(f.Operator)+" \""+f.Value+"\"")
+					}
+					message = "Filters (" + intToStr(len(activeTabFilters)) + "): " + joinStrings(filterStrings, " AND ") + " | C: clear | /: add"
+				} else {
+					message = "No filter | Press / to filter"
+				}
+
+				filterBarStyle := lipgloss.NewStyle().
+					Foreground(t.Colors.Foreground).
+					Border(lipgloss.RoundedBorder()).
+					BorderForeground(t.Colors.BorderUnfocused).
+					Width(m.ContentWidth-4).
+					Padding(0, 1)
+				filterView = filterBarStyle.Render(message)
 			}
 
-			filterBarStyle := lipgloss.NewStyle().
-				Foreground(t.Colors.Foreground).
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(t.Colors.BorderUnfocused).
-				Width(m.ContentWidth-4).
-				Padding(0, 1)
-			filterView = filterBarStyle.Render(message)
+			mainArea = lipgloss.JoinVertical(lipgloss.Left, filterView, contentView)
 		}
-
-		mainArea = lipgloss.JoinVertical(lipgloss.Left, filterView, contentView)
 	} else {
 		// Show placeholder when no tabs are open
 		// Account for border (2 chars on each side = 4 total)

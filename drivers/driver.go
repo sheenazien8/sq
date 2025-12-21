@@ -25,4 +25,7 @@ type Driver interface {
 	GetIndexInfo(database, table string) ([]IndexInfo, error)
 	GetRelationInfo(database, table string) ([]RelationInfo, error)
 	GetTriggerInfo(database, table string) ([]TriggerInfo, error)
+
+	// Query execution
+	ExecuteQuery(query string) ([][]string, error)
 }

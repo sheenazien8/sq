@@ -12,6 +12,7 @@ import (
 	"github.com/sheenazien8/db-client-tui/storage"
 	"github.com/sheenazien8/db-client-tui/ui/filter"
 	"github.com/sheenazien8/db-client-tui/ui/modal"
+	queryeditor "github.com/sheenazien8/db-client-tui/ui/query-editor"
 	"github.com/sheenazien8/db-client-tui/ui/sidebar"
 	"github.com/sheenazien8/db-client-tui/ui/tab"
 	"github.com/sheenazien8/db-client-tui/ui/table"
@@ -43,6 +44,81 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Sidebar is updated via updateSidebarConnection
+
+		return m, nil
+
+	case queryeditor.CellPreviewMsg:
+		// Show cell preview modal for query editor results
+		if msg.Content != "" {
+			m.CellPreviewModal.Show(msg.Content)
+			m.Focus = FocusCellPreviewModal
+			m = m.updateFooter()
+		}
+		return m, nil
+
+	case queryeditor.YankCellMsg:
+		// Copy cell content to clipboard from query editor results
+		if msg.Content != "" {
+			err := clipboard.WriteAll(msg.Content)
+			if err != nil {
+				logger.Error("Failed to copy to clipboard", map[string]any{"error": err.Error()})
+			} else {
+				logger.Info("Cell content copied to clipboard", map[string]any{"length": len(msg.Content)})
+			}
+		}
+		return m, nil
+
+	case queryeditor.QueryExecuteMsg:
+		// Execute the query
+		logger.Debug("Query execute requested", map[string]any{
+			"query":      msg.Query,
+			"connection": msg.ConnectionName,
+			"database":   msg.DatabaseName,
+		})
+
+		driver, exists := m.dbConnections[msg.ConnectionName]
+		if !exists {
+			logger.Error("No active connection for query", map[string]any{
+				"connection": msg.ConnectionName,
+			})
+			m.Tabs.SetQueryError("No active connection: " + msg.ConnectionName)
+			return m, nil
+		}
+
+		// Execute the query
+		data, err := driver.ExecuteQuery(msg.Query)
+		if err != nil {
+			logger.Error("Query execution failed", map[string]any{
+				"error": err.Error(),
+			})
+			m.Tabs.SetQueryError(err.Error())
+			return m, nil
+		}
+
+		// Convert data to table format
+		if len(data) > 0 {
+			// First row is headers
+			columns := make([]table.Column, len(data[0]))
+			for i, colName := range data[0] {
+				columns[i] = table.Column{
+					Title: colName,
+					Width: max(10, len(colName)+2),
+				}
+			}
+
+			// Rest are rows
+			var rows []table.Row
+			for i := 1; i < len(data); i++ {
+				rows = append(rows, table.Row(data[i]))
+			}
+
+			m.Tabs.SetQueryResults(columns, rows)
+			logger.Info("Query executed successfully", map[string]any{
+				"rows": len(rows),
+			})
+		} else {
+			m.Tabs.SetQueryResults([]table.Column{}, []table.Row{})
+		}
 
 		return m, nil
 
@@ -238,6 +314,50 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 		}
 
+		// If query editor is active, pass most keys directly to it
+		// Only intercept specific control keys for app-level navigation
+		if m.Focus == FocusMain && m.Tabs.HasTabs() && m.Tabs.GetActiveTabType() == tab.TabTypeQuery {
+			switch msg.String() {
+			case "ctrl+c":
+				// Show exit modal
+				m.ExitModal.Show()
+				m.Focus = FocusExitModal
+				m = m.updateFooter()
+				return m, nil
+			case "tab":
+				// Switch to sidebar if not collapsed
+				if !m.sidebarCollapsed {
+					m.Focus = FocusSidebar
+					m.Sidebar.SetFocused(true)
+					m.Tabs.SetFocused(false)
+					m = m.updateFooter()
+				}
+				return m, nil
+			case "]":
+				m.Tabs.NextTab()
+				m = m.updateFooter()
+				return m, nil
+			case "[":
+				m.Tabs.PrevTab()
+				m = m.updateFooter()
+				return m, nil
+			case "ctrl+w":
+				m.Tabs.CloseTab(m.Tabs.ActiveTabIndex())
+				if !m.Tabs.HasTabs() {
+					m.Focus = FocusSidebar
+					m.Sidebar.SetFocused(true)
+					m.Tabs.SetFocused(false)
+				}
+				m = m.updateFooter()
+				return m, nil
+			default:
+				// Pass all other keys to the query editor
+				m.Tabs, cmd = m.Tabs.Update(msg)
+				cmds = append(cmds, cmd)
+				return m, tea.Batch(cmds...)
+			}
+		}
+
 		switch msg.String() {
 		case "ctrl+c", "q":
 			if m.Focus == FocusSidebar || m.Focus == FocusMain {
@@ -382,6 +502,45 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						return m, nil
 					}
 				}
+			}
+
+		case "e", "E":
+			// Open query editor in a new tab
+			activeDB := m.Sidebar.ActiveDatabase()
+			if activeDB != nil && activeDB.Connected {
+				// Get database name from connection
+				connections := m.Sidebar.GetConnections()
+				var dbName string
+				for _, conn := range connections {
+					if conn.Name == activeDB.Name {
+						dbName = extractDatabaseName(conn.Host, conn.Type)
+						break
+					}
+				}
+
+				if dbName != "" {
+					// Add query tab
+					tabName := "Query"
+					m.Tabs.AddQueryTab(tabName, activeDB.Name, dbName)
+
+					// Set tab dimensions
+					tableWidth := m.ContentWidth - 4
+					tableHeight := m.ContentHeight - 3 - 2
+					m.Tabs.SetSize(tableWidth, tableHeight)
+
+					// Switch focus to main area
+					m.Focus = FocusMain
+					m.Sidebar.SetFocused(false)
+					m.Tabs.SetFocused(true)
+					m = m.updateFooter()
+
+					logger.Info("Query editor opened", map[string]any{
+						"connection": activeDB.Name,
+						"database":   dbName,
+					})
+				}
+			} else {
+				logger.Debug("Cannot open query editor: no active connection", map[string]any{})
 			}
 
 		case "s", "S":
@@ -642,17 +801,20 @@ func (m Model) updateTabSize() Model {
 func (m Model) getFooterHelp() string {
 	switch m.Focus {
 	case FocusSidebar:
-		return "j/k: Navigate | Enter: Select/Connect | d: Structure | n: New Connection | s: Toggle Sidebar | Tab: Switch | T: Theme | q: Quit"
+		return "j/k: Navigate | Enter: Select/Connect | e: Query Editor | d: Structure | n: New Connection | s: Toggle Sidebar | Tab: Switch | T: Theme | q: Quit"
 	case FocusMain:
 		if m.Tabs.HasTabs() {
 			tabType := m.Tabs.GetActiveTabType()
 			if tabType == tab.TabTypeStructure {
 				return "j/k/h/l: Navigate | 1-4: Sections | Tab: Next Section | []: Switch Tab | Ctrl+W: Close | s: Toggle Sidebar | q: Quit"
 			}
-			if !m.sidebarCollapsed {
-				return "j/k/h/l: Navigate | d: Structure | y: Yank | p: Preview | /: Filter | C: Clear | []: Switch Tab | s: Toggle Sidebar | q: Quit"
+			if tabType == tab.TabTypeQuery {
+				return "F5/Ctrl+E: Execute | Ctrl+R: Toggle Focus | []: Switch Tab | Ctrl+W: Close | Tab: Sidebar | q: Quit"
 			}
-			return "j/k/h/l: Navigate | d: Structure | y: Yank | p: Preview | /: Filter | C: Clear | []: Switch Tab | s: Toggle Sidebar | q: Quit"
+			if !m.sidebarCollapsed {
+				return "j/k/h/l: Navigate | e: Query | d: Structure | y: Yank | p: Preview | /: Filter | C: Clear | []: Switch Tab | s: Toggle Sidebar | q: Quit"
+			}
+			return "j/k/h/l: Navigate | e: Query | d: Structure | y: Yank | p: Preview | /: Filter | C: Clear | []: Switch Tab | s: Toggle Sidebar | q: Quit"
 		}
 		if !m.sidebarCollapsed {
 			return "s: Toggle Sidebar | Tab: Switch | T: Theme | q: Quit"

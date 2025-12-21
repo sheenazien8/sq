@@ -8,6 +8,7 @@ import (
 	"github.com/sheenazien8/db-client-tui/drivers"
 	"github.com/sheenazien8/db-client-tui/logger"
 	"github.com/sheenazien8/db-client-tui/ui/filter"
+	queryeditor "github.com/sheenazien8/db-client-tui/ui/query-editor"
 	"github.com/sheenazien8/db-client-tui/ui/table"
 	"github.com/sheenazien8/db-client-tui/ui/theme"
 )
@@ -30,6 +31,7 @@ type TabType int
 const (
 	TabTypeTable TabType = iota
 	TabTypeStructure
+	TabTypeQuery
 )
 
 // StructureSection represents which section of structure is active
@@ -408,6 +410,11 @@ func (m *Model) SetSize(width, height int) {
 				sv.SetSize(width, height-1)
 				m.tabs[i].Content = sv
 			}
+		case TabTypeQuery:
+			if qe, ok := m.tabs[i].Content.(queryeditor.Model); ok {
+				qe.SetSize(width, height-1)
+				m.tabs[i].Content = qe
+			}
 		}
 	}
 }
@@ -426,6 +433,11 @@ func (m *Model) SetFocused(focused bool) {
 			if sv, ok := m.tabs[m.activeTab].Content.(StructureView); ok {
 				sv.SetFocused(focused)
 				m.tabs[m.activeTab].Content = sv
+			}
+		case TabTypeQuery:
+			if qe, ok := m.tabs[m.activeTab].Content.(queryeditor.Model); ok {
+				qe.SetFocused(focused)
+				m.tabs[m.activeTab].Content = qe
 			}
 		}
 	}
@@ -463,6 +475,11 @@ func (m Model) GetActiveTabType() TabType {
 		return m.tabs[m.activeTab].Type
 	}
 	return TabTypeTable
+}
+
+// ActiveTabIndex returns the index of the active tab
+func (m Model) ActiveTabIndex() int {
+	return m.activeTab
 }
 
 // UpdateActiveTabContent updates the content of the active tab
@@ -587,6 +604,11 @@ func (m *Model) addTab(newTab Tab) {
 				sv.SetFocused(false)
 				m.tabs[m.activeTab].Content = sv
 			}
+		case TabTypeQuery:
+			if qe, ok := m.tabs[m.activeTab].Content.(queryeditor.Model); ok {
+				qe.SetFocused(false)
+				m.tabs[m.activeTab].Content = qe
+			}
 		}
 	}
 
@@ -617,6 +639,64 @@ func (m *Model) AddStructureTab(name string, structure *drivers.TableStructure) 
 	m.addTab(newTab)
 }
 
+// AddQueryTab adds a new tab with a query editor
+func (m *Model) AddQueryTab(name, connectionName, databaseName string) {
+	logger.Debug("AddQueryTab called", map[string]any{
+		"name":       name,
+		"connection": connectionName,
+		"database":   databaseName,
+	})
+
+	qe := queryeditor.New(connectionName, databaseName)
+	qe.SetSize(m.width, m.height-3)
+	qe.SetFocused(m.focused)
+
+	newTab := Tab{
+		Name:    name,
+		Content: qe,
+		Type:    TabTypeQuery,
+		Active:  true,
+	}
+
+	m.addTab(newTab)
+}
+
+// GetActiveQueryEditor returns the query editor from the active tab if it's a query tab
+func (m Model) GetActiveQueryEditor() *queryeditor.Model {
+	if m.activeTab >= 0 && m.activeTab < len(m.tabs) {
+		if m.tabs[m.activeTab].Type == TabTypeQuery {
+			if qe, ok := m.tabs[m.activeTab].Content.(queryeditor.Model); ok {
+				return &qe
+			}
+		}
+	}
+	return nil
+}
+
+// SetQueryResults sets the results on the active query editor tab
+func (m *Model) SetQueryResults(columns []table.Column, rows []table.Row) {
+	if m.activeTab >= 0 && m.activeTab < len(m.tabs) {
+		if m.tabs[m.activeTab].Type == TabTypeQuery {
+			if qe, ok := m.tabs[m.activeTab].Content.(queryeditor.Model); ok {
+				qe.SetResults(columns, rows)
+				m.tabs[m.activeTab].Content = qe
+			}
+		}
+	}
+}
+
+// SetQueryError sets an error on the active query editor tab
+func (m *Model) SetQueryError(err string) {
+	if m.activeTab >= 0 && m.activeTab < len(m.tabs) {
+		if m.tabs[m.activeTab].Type == TabTypeQuery {
+			if qe, ok := m.tabs[m.activeTab].Content.(queryeditor.Model); ok {
+				qe.SetError(err)
+				m.tabs[m.activeTab].Content = qe
+			}
+		}
+	}
+}
+
 // SwitchTab switches to the tab at the given index
 func (m *Model) SwitchTab(index int) {
 	if index < 0 || index >= len(m.tabs) {
@@ -637,6 +717,11 @@ func (m *Model) SwitchTab(index int) {
 				sv.SetFocused(false)
 				m.tabs[m.activeTab].Content = sv
 			}
+		case TabTypeQuery:
+			if qe, ok := m.tabs[m.activeTab].Content.(queryeditor.Model); ok {
+				qe.SetFocused(false)
+				m.tabs[m.activeTab].Content = qe
+			}
 		}
 	}
 
@@ -652,6 +737,11 @@ func (m *Model) SwitchTab(index int) {
 		if sv, ok := m.tabs[m.activeTab].Content.(StructureView); ok {
 			sv.SetFocused(m.focused)
 			m.tabs[m.activeTab].Content = sv
+		}
+	case TabTypeQuery:
+		if qe, ok := m.tabs[m.activeTab].Content.(queryeditor.Model); ok {
+			qe.SetFocused(m.focused)
+			m.tabs[m.activeTab].Content = qe
 		}
 	}
 }
@@ -714,6 +804,11 @@ func (m *Model) focusActiveTab() {
 			sv.SetFocused(m.focused)
 			m.tabs[m.activeTab].Content = sv
 		}
+	case TabTypeQuery:
+		if qe, ok := m.tabs[m.activeTab].Content.(queryeditor.Model); ok {
+			qe.SetFocused(m.focused)
+			m.tabs[m.activeTab].Content = qe
+		}
 	}
 }
 
@@ -727,6 +822,28 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if m.activeTab < 0 || m.activeTab >= len(m.tabs) {
 			return m, nil
+		}
+
+		// For query editor, only intercept tab switching keys, pass everything else through
+		if m.tabs[m.activeTab].Type == TabTypeQuery {
+			switch msg.String() {
+			case "]":
+				m.NextTab()
+				return m, nil
+			case "[":
+				m.PrevTab()
+				return m, nil
+			case "ctrl+w":
+				m.CloseTab(m.activeTab)
+				return m, nil
+			default:
+				if qe, ok := m.tabs[m.activeTab].Content.(queryeditor.Model); ok {
+					var cmd tea.Cmd
+					qe, cmd = qe.Update(msg)
+					m.tabs[m.activeTab].Content = qe
+					return m, cmd
+				}
+			}
 		}
 
 		switch msg.String() {
@@ -785,8 +902,11 @@ func (m Model) View() string {
 
 		name := tab.Name
 		// Add icon based on tab type
-		if tab.Type == TabTypeStructure {
+		switch tab.Type {
+		case TabTypeStructure:
 			name = "[S] " + name
+		case TabTypeQuery:
+			name = "[Q] " + name
 		}
 		if len(name) > 18 {
 			name = name[:15] + "..."
@@ -822,6 +942,10 @@ func (m Model) View() string {
 		case TabTypeStructure:
 			if sv, ok := m.tabs[m.activeTab].Content.(StructureView); ok {
 				contentView = sv.View()
+			}
+		case TabTypeQuery:
+			if qe, ok := m.tabs[m.activeTab].Content.(queryeditor.Model); ok {
+				contentView = qe.View()
 			}
 		}
 	}
