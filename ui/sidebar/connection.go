@@ -3,6 +3,7 @@ package sidebar
 import (
 	"strings"
 
+	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/sheenazien8/sq/logger"
@@ -56,15 +57,27 @@ type Model struct {
 	width       int
 	height      int
 	focused     bool
+
+	// Filter state
+	filterInput textinput.Model
+	filterText  string
+	showFilter  bool
 }
 
 // New creates a new sidebar model with sample databases
 func New() Model {
+	ti := textinput.New()
+	ti.Placeholder = "filter connections/tables..."
+	ti.CharLimit = 50
+
 	return Model{
 		connections: getConnections(),
 		cursor:      0,
 		offset:      0,
 		focused:     false,
+		filterInput: ti,
+		filterText:  "",
+		showFilter:  false,
 	}
 }
 
@@ -110,6 +123,136 @@ func (m *Model) SetFocused(focused bool) {
 // Focused returns whether the sidebar is focused
 func (m Model) Focused() bool {
 	return m.focused
+}
+
+// SetFilterVisible shows/hides the sidebar filter
+func (m *Model) SetFilterVisible(visible bool) {
+	m.showFilter = visible
+	if visible {
+		m.filterInput.Focus()
+	} else {
+		m.filterInput.Blur()
+		m.filterText = ""
+		// Reset cursor when clearing filter
+		m.cursor = 0
+		m.offset = 0
+	}
+	// Adjust scrolling for new layout
+	m.adjustScrolling()
+}
+
+// HideFilterInput hides the filter input without clearing the filter text
+func (m *Model) HideFilterInput() {
+	m.showFilter = false
+	m.filterInput.Blur()
+	// Adjust scrolling for new layout
+	m.adjustScrolling()
+}
+
+// adjustScrolling adjusts cursor and offset based on current visible items
+func (m *Model) adjustScrolling() {
+	treeItems := m.getTreeItems()
+	visibleCount := m.visibleItems()
+
+	// Adjust cursor if out of bounds
+	if m.cursor >= len(treeItems) {
+		m.cursor = max(0, len(treeItems)-1)
+	}
+
+	// Adjust offset if needed
+	maxOffset := max(0, len(treeItems)-visibleCount)
+	if m.offset > maxOffset {
+		m.offset = maxOffset
+	}
+
+	// Ensure cursor is visible
+	if m.cursor < m.offset {
+		m.offset = m.cursor
+	} else if m.cursor >= m.offset+visibleCount {
+		m.offset = m.cursor - visibleCount + 1
+	}
+}
+
+// GetFilterText returns the current filter text
+func (m Model) GetFilterText() string {
+	return m.filterText
+}
+
+// SetFilterText sets the filter text
+func (m *Model) SetFilterText(text string) {
+	m.filterText = text
+	// Reset cursor when filter changes
+	m.cursor = 0
+	m.offset = 0
+}
+
+// IsFilterVisible returns whether the sidebar filter is visible
+func (m Model) IsFilterVisible() bool {
+	return m.showFilter
+}
+
+// UpdateFilterInput updates the filter input component
+func (m *Model) UpdateFilterInput(msg tea.Msg) tea.Cmd {
+	var cmd tea.Cmd
+	m.filterInput, cmd = m.filterInput.Update(msg)
+	m.filterText = m.filterInput.Value()
+	return cmd
+}
+
+// GetFilterInput returns the filter input model
+func (m Model) GetFilterInput() textinput.Model {
+	return m.filterInput
+}
+
+// ClearFilterInput clears the filter input
+func (m *Model) ClearFilterInput() {
+	m.filterInput = textinput.New()
+	m.filterInput.Placeholder = "filter connections/tables..."
+	m.filterInput.CharLimit = 50
+	if m.showFilter {
+		m.filterInput.Focus()
+	}
+	m.filterText = ""
+}
+
+// getFilteredConnections returns connections filtered by the current filter text
+func (m Model) getFilteredConnections() []Connection {
+	if m.filterText == "" {
+		return m.connections
+	}
+
+	var filtered []Connection
+	filterLower := strings.ToLower(m.filterText)
+
+	for _, conn := range m.connections {
+		connLower := strings.ToLower(conn.Name)
+
+		// Check if connection name matches
+		if strings.Contains(connLower, filterLower) {
+			filtered = append(filtered, conn)
+			continue
+		}
+
+		// Check if any table name matches
+		var matchingTables []Table
+		for _, table := range conn.Tables {
+			tableLower := strings.ToLower(table.Name)
+			if strings.Contains(tableLower, filterLower) {
+				matchingTables = append(matchingTables, table)
+			}
+		}
+
+		// If tables match, include connection with only matching tables
+		if len(matchingTables) > 0 {
+			filteredConn := conn
+			filteredConn.Tables = matchingTables
+			// Expand connection if it has matching tables
+			filteredConn.Expanded = true
+			filtered = append(filtered, filteredConn)
+		}
+	}
+
+	return filtered
 }
 
 // Cursor returns the current cursor position
@@ -214,17 +357,55 @@ func (m *Model) RefreshConnections() {
 func (m Model) getTreeItems() []TreeItem {
 	var items []TreeItem
 
-	for connIdx, conn := range m.connections {
-		items = append(items, TreeItem{
-			ConnectionIndex: connIdx,
-			TableIndex:      -1,
-			Level:           0,
-			IsLastChild:     false,
-		})
+	filterLower := strings.ToLower(m.filterText)
 
-		if conn.Expanded {
-			for tableIdx := range conn.Tables {
-				isLast := tableIdx == len(conn.Tables)-1
+	for connIdx, conn := range m.connections {
+		connLower := strings.ToLower(conn.Name)
+		includeConnection := m.filterText == "" || strings.Contains(connLower, filterLower)
+
+		// Check tables for matches
+		var matchingTableIndices []int
+		for tableIdx, table := range conn.Tables {
+			tableLower := strings.ToLower(table.Name)
+			if m.filterText == "" || strings.Contains(tableLower, filterLower) {
+				matchingTableIndices = append(matchingTableIndices, tableIdx)
+			}
+		}
+
+		// Handle table display based on expansion and filtering
+		var tablesToShow []int
+
+		if m.filterText == "" {
+			// No filter: show tables only if connection is expanded
+			if conn.Expanded {
+				for tableIdx := range conn.Tables {
+					tablesToShow = append(tablesToShow, tableIdx)
+				}
+			}
+		} else {
+			// With filter: show matching tables
+			if len(matchingTableIndices) > 0 {
+				tablesToShow = matchingTableIndices
+			} else if conn.Expanded && includeConnection {
+				// If connection matches but no specific table matches, show all tables if expanded
+				for tableIdx := range conn.Tables {
+					tablesToShow = append(tablesToShow, tableIdx)
+				}
+			}
+		}
+
+		// Add the connection and its tables if it should be included
+		if includeConnection || len(matchingTableIndices) > 0 {
+			items = append(items, TreeItem{
+				ConnectionIndex: connIdx,
+				TableIndex:      -1,
+				Level:           0,
+				IsLastChild:     false,
+			})
+
+			// Add tables
+			for i, tableIdx := range tablesToShow {
+				isLast := i == len(tablesToShow)-1
 				items = append(items, TreeItem{
 					ConnectionIndex: connIdx,
 					TableIndex:      tableIdx,
@@ -241,7 +422,12 @@ func (m Model) getTreeItems() []TreeItem {
 // visibleItems returns the number of items that can be displayed
 func (m Model) visibleItems() int {
 	// Account for title (1 line), separator (1 line), status (1 line), borders (2 lines)
-	return max(0, m.height-5)
+	// Plus filter bar (1 line) if visible
+	extraLines := 0
+	if m.showFilter {
+		extraLines = 1
+	}
+	return max(0, m.height-5-extraLines)
 }
 
 // Init initializes the model
@@ -298,6 +484,20 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 						"expanded": conn.Expanded,
 					})
 
+					// Recalculate tree items after expansion change
+					treeItems = m.getTreeItems()
+
+					// Adjust cursor if it's now out of bounds
+					if m.cursor >= len(treeItems) {
+						m.cursor = max(0, len(treeItems)-1)
+					}
+
+					// Adjust offset if needed
+					maxOffset := max(0, len(treeItems)-m.visibleItems())
+					if m.offset > maxOffset {
+						m.offset = maxOffset
+					}
+
 					// Send connection selected message
 					return m, func() tea.Msg {
 						return ConnectionSelectedMsg{
@@ -344,8 +544,22 @@ func (m Model) View() string {
 
 	var lines []string
 
+	// Filter input (if visible)
+	if m.showFilter {
+		filterStyle := lipgloss.NewStyle().
+			Foreground(t.Colors.Primary).
+			Background(t.Colors.SelectionBg).
+			Padding(0, 1)
+		filterLine := filterStyle.Width(innerWidth).Render(m.filterInput.View())
+		lines = append(lines, filterLine)
+	}
+
 	// Title
-	title := t.SidebarTitle.Width(innerWidth).Render(" Databases")
+	titleText := " Databases"
+	if m.filterText != "" && !m.showFilter {
+		titleText += " (filtered: " + m.filterText + ")"
+	}
+	title := t.SidebarTitle.Width(innerWidth).Render(titleText)
 	lines = append(lines, title)
 
 	// Separator

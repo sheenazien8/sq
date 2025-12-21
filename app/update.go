@@ -262,6 +262,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 		}
 
+		if m.Sidebar.IsFilterVisible() {
+			// Handle sidebar filter input
+			cmd := m.Sidebar.UpdateFilterInput(msg)
+			cmds = append(cmds, cmd)
+
+			// Check for exit keys
+			switch msg.String() {
+			case "enter":
+				// Apply filter and return to sidebar (keep filter active)
+				m.Sidebar.HideFilterInput()
+				m.Focus = FocusSidebar
+				m = m.updateFooter()
+			case "esc":
+				// Cancel filter and return to sidebar (clear filter)
+				m.Sidebar.SetFilterVisible(false)
+				m.Focus = FocusSidebar
+				m = m.updateFooter()
+			case "ctrl+c":
+				// Clear filter
+				m.Sidebar.ClearFilterInput()
+			}
+			return m, tea.Batch(cmds...)
+		}
+
 		if m.CreateConnectionModal.Visible() {
 			m.CreateConnectionModal, cmd = m.CreateConnectionModal.Update(msg)
 			cmds = append(cmds, cmd)
@@ -380,6 +404,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m = m.updateTabSize()
 					m = m.updateFooter()
 				}
+			} else if m.Focus == FocusSidebar {
+				// Toggle sidebar filter
+				if !m.Sidebar.IsFilterVisible() {
+					// Show filter input
+					m.Sidebar.SetFilterVisible(true)
+					m.Focus = FocusSidebarFilter
+				} else {
+					// Hide filter input but keep filter active
+					m.Sidebar.HideFilterInput()
+					m.Focus = FocusSidebar
+				}
+				m = m.updateFooter()
 			} else {
 				m.Sidebar, cmd = m.Sidebar.Update(msg)
 				cmds = append(cmds, cmd)
@@ -431,9 +467,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m = m.updateStyles()
 
 		case "C":
-			m.Tabs.ClearActiveTabFilters()
-			m = m.applyFilterToActiveTab()
-			m = m.updateTabSize()
+			if m.Focus == FocusSidebar {
+				// Clear sidebar filter
+				m.Sidebar.SetFilterText("")
+				m.Sidebar.ClearFilterInput()
+			} else {
+				// Clear table filters
+				m.Tabs.ClearActiveTabFilters()
+				m = m.applyFilterToActiveTab()
+				m = m.updateTabSize()
+			}
+
+		case "r", "R":
+			if m.Focus == FocusSidebar {
+				// Refresh connections
+				m.Sidebar.RefreshConnections()
+			}
 
 		case "p":
 			if m.Focus == FocusMain && m.Tabs.HasTabs() {
@@ -801,7 +850,7 @@ func (m Model) updateTabSize() Model {
 func (m Model) getFooterHelp() string {
 	switch m.Focus {
 	case FocusSidebar:
-		return "j/k: Navigate | Enter: Select/Connect | e: Query Editor | d: Structure | n: New Connection | s: Toggle Sidebar | Tab: Switch | T: Theme | q: Quit"
+		return "j/k: Navigate | Enter: Select/Connect | e: Query Editor | d: Structure | n: New Connection | /: Filter | C: Clear Filter | R: Refresh | s: Toggle Sidebar | Tab: Switch | T: Theme | q: Quit"
 	case FocusMain:
 		if m.Tabs.HasTabs() {
 			tabType := m.Tabs.GetActiveTabType()
@@ -822,6 +871,8 @@ func (m Model) getFooterHelp() string {
 		return "s: Toggle Sidebar | T: Theme | q: Quit"
 	case FocusFilter:
 		return "Tab/h/l: Switch Field | j/k: Navigate Options | Enter: Apply | Esc: Cancel | Ctrl+C: Clear"
+	case FocusSidebarFilter:
+		return "Enter: Apply | Esc: Cancel | Ctrl+C: Clear"
 	case FocusExitModal:
 		return "y: Yes | n/Esc: No | h/l: Switch Button"
 	case FocusCreateConnectionModal:

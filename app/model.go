@@ -24,6 +24,7 @@ const (
 	FocusSidebar Focus = iota
 	FocusMain
 	FocusFilter
+	FocusSidebarFilter
 	FocusExitModal
 	FocusCreateConnectionModal
 	FocusCellPreviewModal
