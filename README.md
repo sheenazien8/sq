@@ -13,14 +13,15 @@ See `demo/demo.mov` for a demonstration of the current functionality.
 ### Prerequisites
 - Go 1.22 or later
 
-### Setup
+### Install
+```bash
+go install github.com/sheenazien8/sq@latest
+```
+
+### From source
 ```bash
 go mod download
 go mod tidy
-```
-
-### Building
-```bash
 go build -o sq
 ./sq
 ```
