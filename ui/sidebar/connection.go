@@ -18,12 +18,13 @@ type Table struct {
 
 // Connection represents a database item in the sidebar
 type Connection struct {
-	Name     string
-	Type     string
-	Host     string
-	Selected bool
-	Expanded bool
-	Tables   []Table
+	Name      string
+	Type      string
+	Host      string
+	Selected  bool
+	Expanded  bool
+	Connected bool
+	Tables    []Table
 }
 
 // TreeItem represents an item in the tree (connection or table)
@@ -38,6 +39,13 @@ type TreeItem struct {
 type TableSelectedMsg struct {
 	ConnectionName string
 	TableName      string
+}
+
+// ConnectionSelectedMsg is sent when a connection is selected (expanded/activated)
+type ConnectionSelectedMsg struct {
+	ConnectionName string
+	ConnectionType string
+	ConnectionURL  string
 }
 
 // Model represents the sidebar with database list
@@ -74,20 +82,14 @@ func getConnections() (data []Connection) {
 	})
 
 	for _, connection := range connections {
-		// Add mock tables for demonstration
-		mockTables := []Table{
-			{Name: "users", RowCount: 1250},
-			{Name: "products", RowCount: 500},
-			{Name: "orders", RowCount: 3200},
-			{Name: "categories", RowCount: 45},
-		}
-
+		// Start with no tables - they will be loaded when connection is established
 		data = append(data, Connection{
-			Name:     connection.Name,
-			Type:     connection.Driver,
-			Host:     connection.URL,
-			Tables:   mockTables,
-			Expanded: false, // start collapsed
+			Name:      connection.Name,
+			Type:      connection.Driver,
+			Host:      connection.URL,
+			Tables:    []Table{}, // Empty initially
+			Expanded:  false,     // start collapsed
+			Connected: false,     // start disconnected
 		})
 	}
 
@@ -152,6 +154,35 @@ func (m Model) HasActiveDatabase() bool {
 // SetDatabases updates the database list
 func (m *Model) SetDatabases(databases []Connection) {
 	m.connections = databases
+	treeItems := m.getTreeItems()
+	if m.cursor >= len(treeItems) {
+		m.cursor = max(0, len(treeItems)-1)
+	}
+}
+
+// GetConnections returns the current connections
+func (m Model) GetConnections() []Connection {
+	return m.connections
+}
+
+// UpdateConnection updates a specific connection with new table data and connection status
+func (m *Model) UpdateConnection(name string, tableNames []string, connected bool) {
+	for i := range m.connections {
+		if m.connections[i].Name == name {
+			m.connections[i].Connected = connected
+			m.connections[i].Tables = make([]Table, len(tableNames))
+			for j, tableName := range tableNames {
+				m.connections[i].Tables[j] = Table{
+					Name:     tableName,
+					RowCount: 0, // TODO: Get actual row count
+					Selected: false,
+				}
+			}
+			break
+		}
+	}
+
+	// Update tree items and cursor position
 	treeItems := m.getTreeItems()
 	if m.cursor >= len(treeItems) {
 		m.cursor = max(0, len(treeItems)-1)
@@ -254,6 +285,15 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 						"name":     conn.Name,
 						"expanded": conn.Expanded,
 					})
+
+					// Send connection selected message
+					return m, func() tea.Msg {
+						return ConnectionSelectedMsg{
+							ConnectionName: conn.Name,
+							ConnectionType: conn.Type,
+							ConnectionURL:  conn.Host,
+						}
+					}
 				} else {
 					conn := &m.connections[item.ConnectionIndex]
 					table := &conn.Tables[item.TableIndex]
@@ -321,7 +361,19 @@ func (m Model) View() string {
 				treeChar = "▼"
 			}
 
-			text = treeChar + " " + icon + " " + truncateString(conn.Name, innerWidth-6)
+			checkIcon := ""
+			if conn.Connected {
+				checkIcon = "✓ "
+			}
+
+			// Calculate available space for name
+			// Account for: treeChar (1) + space + icon (3) + space + checkIcon (0 or 2)
+			treeCharLen := lipgloss.Width(treeChar)
+			iconLen := lipgloss.Width(icon)
+			checkIconLen := lipgloss.Width(checkIcon)
+			availableForName := innerWidth - treeCharLen - 1 - iconLen - 1 - checkIconLen
+
+			text = treeChar + " " + icon + " " + checkIcon + truncateString(conn.Name, availableForName)
 
 			if isSelected && m.focused {
 				style = t.SidebarSelected
@@ -342,8 +394,18 @@ func (m Model) View() string {
 			}
 
 			tableIcon := "󰓫"
-			text = prefix + " " + tableIcon + " " + truncateString(table.Name, innerWidth-8) +
-				" (" + intToStr(int(table.RowCount)) + ")"
+
+			// Calculate row count suffix
+			rowCountSuffix := " (" + intToStr(int(table.RowCount)) + ")"
+
+			// Account for: prefix (4-5 chars) + space + icon + space + row count suffix
+			// Leave room for all parts
+			prefixLen := lipgloss.Width(prefix)
+			iconLen := lipgloss.Width(tableIcon)
+			suffixLen := lipgloss.Width(rowCountSuffix)
+			availableForName := innerWidth - prefixLen - 1 - iconLen - 1 - suffixLen
+
+			text = prefix + " " + tableIcon + " " + truncateString(table.Name, availableForName) + rowCountSuffix
 
 			if isSelected && m.focused {
 				style = t.SidebarSelected

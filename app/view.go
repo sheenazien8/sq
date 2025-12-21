@@ -1,6 +1,7 @@
 package app
 
 import (
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/sheenazien8/db-client-tui/ui/theme"
 )
@@ -32,7 +33,6 @@ func joinStrings(strs []string, sep string) string {
 	return result
 }
 
-
 // View renders the main application view
 func (m Model) View() string {
 	if m.TerminalWidth == 0 || m.TerminalHeight == 0 {
@@ -50,6 +50,7 @@ func (m Model) View() string {
 	t := theme.Current
 
 	sidebarView := m.Sidebar.View()
+	sidebarActualWidth := lipgloss.Width(sidebarView)
 
 	var tableBorderStyle lipgloss.Style
 	if m.Focus == FocusMain {
@@ -67,7 +68,7 @@ func (m Model) View() string {
 	} else {
 		filterBarHeight = 3 // Status line with border needs 3 lines (1 content + 2 border)
 	}
-	
+
 	tableHeight := contentHeight - filterBarHeight
 
 	var mainArea string
@@ -75,8 +76,9 @@ func (m Model) View() string {
 	// Show tabs if they exist, otherwise show placeholder
 	if m.Tabs.HasTabs() {
 		// Show tabbed interface
+		// Account for border (2 chars on each side = 4 total)
 		contentView := tableBorderStyle.
-			Width(m.ContentWidth).
+			Width(m.ContentWidth - 4).
 			Height(tableHeight).
 			Render(m.Tabs.View())
 
@@ -88,7 +90,7 @@ func (m Model) View() string {
 		} else {
 			// Show filter status or empty filter bar (1 line with border)
 			activeTabFilters := m.Tabs.GetActiveTabFilters()
-			
+
 			var message string
 			if len(activeTabFilters) > 0 {
 				// Show all active filters with AND
@@ -100,11 +102,12 @@ func (m Model) View() string {
 			} else {
 				message = "No filter | Press / to filter"
 			}
-			
+
 			filterBarStyle := lipgloss.NewStyle().
 				Foreground(t.Colors.Foreground).
 				Border(lipgloss.RoundedBorder()).
 				BorderForeground(t.Colors.BorderUnfocused).
+				Width(m.ContentWidth-4).
 				Padding(0, 1)
 			filterView = filterBarStyle.Render(message)
 		}
@@ -112,21 +115,29 @@ func (m Model) View() string {
 		mainArea = lipgloss.JoinVertical(lipgloss.Left, filterView, contentView)
 	} else {
 		// Show placeholder when no tabs are open
+		// Account for border (2 chars on each side = 4 total)
 		placeholderStyle := lipgloss.NewStyle().
 			Foreground(t.Colors.ForegroundDim).
 			Align(lipgloss.Center, lipgloss.Center).
-			Width(m.ContentWidth).
-			Height(contentHeight)
+			Width(m.ContentWidth - 4).
+			Height(contentHeight - 2)
 
 		placeholder := placeholderStyle.Render("Select a table from the sidebar to open it in a tab\n(Press Enter on a table to open)")
 
 		mainArea = tableBorderStyle.
-			Width(m.ContentWidth).
-			Height(contentHeight).
+			Width(m.ContentWidth - 4).
+			Height(contentHeight - 2).
 			Render(placeholder)
 	}
 
 	middleSection := lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, mainArea)
+	middleSectionWidth := lipgloss.Width(middleSection)
+
+	// Debug: log if width exceeds terminal
+	if middleSectionWidth > m.TerminalWidth {
+		tea.Printf("WIDTH OVERFLOW: terminal=%d, sidebar=%d, mainArea=%d, total=%d",
+			m.TerminalWidth, sidebarActualWidth, lipgloss.Width(mainArea), middleSectionWidth)
+	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, m.HeaderStyle, middleSection, m.FooterStyle)
 }

@@ -1,6 +1,7 @@
 package filter
 
 import (
+	"sort"
 	"strconv"
 	"strings"
 
@@ -14,14 +15,16 @@ import (
 type Operator string
 
 const (
-	OpEquals      Operator = "equals"
-	OpNotEquals   Operator = "not equals"
+	OpEquals      Operator = "="
+	OpNotEquals   Operator = "!="
 	OpContains    Operator = "LIKE"
 	OpNotContains Operator = "NOT LIKE"
-	OpGreater     Operator = "greater than"
-	OpLess        Operator = "less than"
-	OpGreaterEq   Operator = "greater than equals"
-	OpLessEq      Operator = "less than equals"
+	OpGreater     Operator = ">"
+	OpLess        Operator = "<"
+	OpGreaterEq   Operator = ">="
+	OpLessEq      Operator = "<="
+	OpIs          Operator = "IS"
+	OpIsNot       Operator = "IS NOT"
 )
 
 var operators = []Operator{
@@ -33,6 +36,8 @@ var operators = []Operator{
 	OpLess,
 	OpGreaterEq,
 	OpLessEq,
+	OpIs,
+	OpIsNot,
 }
 
 // Filter represents a single filter condition
@@ -74,8 +79,13 @@ func New(columns []string) Model {
 	ti.CharLimit = 100
 	ti.Width = 30
 
+	// Sort columns alphabetically
+	sortedColumns := make([]string, len(columns))
+	copy(sortedColumns, columns)
+	sort.Strings(sortedColumns)
+
 	return Model{
-		columns:       columns,
+		columns:       sortedColumns,
 		columnIndex:   0,
 		operatorIndex: 0,
 		valueInput:    ti,
@@ -87,7 +97,12 @@ func New(columns []string) Model {
 
 // SetColumns updates the available columns
 func (m *Model) SetColumns(columns []string) {
-	m.columns = columns
+	// Sort columns alphabetically
+	sortedColumns := make([]string, len(columns))
+	copy(sortedColumns, columns)
+	sort.Strings(sortedColumns)
+
+	m.columns = sortedColumns
 	if m.columnIndex >= len(columns) {
 		m.columnIndex = 0
 	}
@@ -341,7 +356,7 @@ func (m Model) View() string {
 	// Help text
 	helpStyle := lipgloss.NewStyle().
 		Foreground(t.Colors.ForegroundDim)
-	help := helpStyle.Render(" | Tab/←→: fields | ↑↓: values | Enter: apply | Esc: close")
+	help := helpStyle.Render()
 
 	// Title
 	titleStyle := lipgloss.NewStyle().
@@ -356,6 +371,7 @@ func (m Model) View() string {
 	containerStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(t.Colors.Primary).
+		Width(m.width-4).
 		Padding(0, 1)
 
 	return containerStyle.Render(line)
@@ -400,6 +416,18 @@ func (f *Filter) Match(row []string, columns []string) bool {
 		return strings.Contains(cellValue, filterValue)
 	case OpNotContains:
 		return !strings.Contains(cellValue, filterValue)
+	case OpIs:
+		// For IS operator, typically used for NULL checks
+		if strings.ToUpper(f.Value) == "NULL" {
+			return cellValue == "null" || cellValue == ""
+		}
+		return cellValue == filterValue
+	case OpIsNot:
+		// For IS NOT operator, typically used for NULL checks
+		if strings.ToUpper(f.Value) == "NULL" {
+			return cellValue != "null" && cellValue != ""
+		}
+		return cellValue != filterValue
 	case OpGreater, OpLess, OpGreaterEq, OpLessEq:
 		// Try numeric comparison
 		cellNum, err1 := parseNumber(cellValue)

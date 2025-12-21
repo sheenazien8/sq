@@ -17,9 +17,9 @@ type Tab struct {
 	Content       interface{} // Can be table.Model or query_editor.Model
 	Type          TabType
 	Active        bool
-	AllRows       []table.Row    // Original unfiltered data
-	Columns       []table.Column // Column definitions
-	ColumnNames   []string       // Column names for filtering
+	AllRows       []table.Row     // Original unfiltered data
+	Columns       []table.Column  // Column definitions
+	ColumnNames   []string        // Column names for filtering
 	ActiveFilters []filter.Filter // Multiple filters applied to this tab (all AND)
 }
 
@@ -96,6 +96,14 @@ func (m Model) ActiveTab() *Tab {
 	return nil
 }
 
+// GetActiveTabName returns the name of the active tab
+func (m Model) GetActiveTabName() string {
+	if m.activeTab >= 0 && m.activeTab < len(m.tabs) {
+		return m.tabs[m.activeTab].Name
+	}
+	return ""
+}
+
 // UpdateActiveTabContent updates the content of the active tab
 func (m *Model) UpdateActiveTabContent(content interface{}) {
 	if m.activeTab >= 0 && m.activeTab < len(m.tabs) {
@@ -169,20 +177,20 @@ func (m *Model) ClearActiveTabFilters() {
 // AddTableTab adds a new tab with table data
 func (m *Model) AddTableTab(name string, columns []table.Column, rows []table.Row) {
 	logger.Debug("AddTableTab called", map[string]any{
-		"name":        name,
-		"columns":     len(columns),
-		"rows":        len(rows),
-		"width":       m.width,
-		"height":      m.height,
+		"name":    name,
+		"columns": len(columns),
+		"rows":    len(rows),
+		"width":   m.width,
+		"height":  m.height,
 	})
 
 	newTable := table.New(columns, rows)
 	newTable.SetSize(m.width, m.height-3)
 	newTable.SetFocused(m.focused)
-    logger.Info("Adding table to tab", map[string]any{
-        "name": name,
-        "type": TabTypeTable,
-    })
+	logger.Info("Adding table to tab", map[string]any{
+		"name": name,
+		"type": TabTypeTable,
+	})
 
 	// Extract column names
 	columnNames := make([]string, len(columns))
@@ -202,6 +210,7 @@ func (m *Model) AddTableTab(name string, columns []table.Column, rows []table.Ro
 
 	m.addTab(newTab)
 }
+
 // addTab is a helper to add a tab and manage active state
 func (m *Model) addTab(newTab Tab) {
 	if m.activeTab >= 0 && m.activeTab < len(m.tabs) {
