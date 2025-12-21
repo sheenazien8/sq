@@ -49,8 +49,14 @@ func (m Model) View() string {
 
 	t := theme.Current
 
-	sidebarView := m.Sidebar.View()
-	sidebarActualWidth := lipgloss.Width(sidebarView)
+	var sidebarView string
+	var sidebarActualWidth int
+	if !m.sidebarCollapsed {
+		sidebarView = m.Sidebar.View()
+		sidebarActualWidth = lipgloss.Width(sidebarView)
+	} else {
+		sidebarActualWidth = 0
+	}
 
 	var tableBorderStyle lipgloss.Style
 	if m.Focus == FocusMain {
@@ -66,7 +72,7 @@ func (m Model) View() string {
 	if m.Filter.Visible() {
 		filterBarHeight = 3 // Editing mode needs 3 lines
 	} else {
-		filterBarHeight = 3 // Status line with border needs 3 lines (1 content + 2 border)
+		filterBarHeight = 3 // Status line with border needs 3 lines
 	}
 
 	tableHeight := contentHeight - filterBarHeight
@@ -130,7 +136,12 @@ func (m Model) View() string {
 			Render(placeholder)
 	}
 
-	middleSection := lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, mainArea)
+	var middleSection string
+	if !m.sidebarCollapsed {
+		middleSection = lipgloss.JoinHorizontal(lipgloss.Top, sidebarView, mainArea)
+	} else {
+		middleSection = mainArea
+	}
 	middleSectionWidth := lipgloss.Width(middleSection)
 
 	// Debug: log if width exceeds terminal

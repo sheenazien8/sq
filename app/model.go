@@ -61,6 +61,8 @@ type Model struct {
 	FooterHeight  int
 	HeaderHeight  int
 
+	sidebarCollapsed bool
+
 	HeaderStyle string
 	FooterStyle string
 

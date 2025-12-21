@@ -96,7 +96,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.TerminalWidth = msg.Width
 		m.TerminalHeight = msg.Height
 		m.SidebarWidth = 32
-		contentWidth := m.TerminalWidth - m.SidebarWidth
+		contentWidth := m.TerminalWidth
+		if !m.sidebarCollapsed {
+			contentWidth -= m.SidebarWidth
+		}
 
 		t := theme.Current
 
@@ -265,14 +268,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m = m.updateFooter()
 				}
 			} else {
-				logger.Debug("Focus changed", map[string]any{
-					"from": "main",
-					"to":   "sidebar",
-				})
-				m.Focus = FocusSidebar
-				m.Sidebar.SetFocused(true)
-				m.Tabs.SetFocused(false)
-				m = m.updateFooter()
+				// Only switch to sidebar if it's not collapsed
+				if !m.sidebarCollapsed {
+					logger.Debug("Focus changed", map[string]any{
+						"from": "main",
+						"to":   "sidebar",
+					})
+					m.Focus = FocusSidebar
+					m.Sidebar.SetFocused(true)
+					m.Tabs.SetFocused(false)
+					m = m.updateFooter()
+				}
 			}
 
 		case "T":
@@ -291,6 +297,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.Tabs.ClearActiveTabFilters()
 			m = m.applyFilterToActiveTab()
 			m = m.updateTabSize()
+
+		case "s", "S":
+			m.sidebarCollapsed = !m.sidebarCollapsed
+			// Recalculate layout after toggling sidebar
+			contentWidth := m.TerminalWidth
+			if !m.sidebarCollapsed {
+				contentWidth -= m.SidebarWidth
+			}
+			m.ContentWidth = contentWidth
+			m.Filter.SetWidth(contentWidth)
+			m.Tabs.SetSize(contentWidth-4, m.ContentHeight-3-2)
+			m = m.updateFooter()
 
 		default:
 			if m.Focus == FocusSidebar {
@@ -538,12 +556,18 @@ func (m Model) updateTabSize() Model {
 func (m Model) getFooterHelp() string {
 	switch m.Focus {
 	case FocusSidebar:
-		return "j/k: Navigate | Enter: Select/Connect | n: New Connection | Tab: Switch | T: Theme | q: Quit"
+		return "j/k: Navigate | Enter: Select/Connect | n: New Connection | s: Toggle Sidebar | Tab: Switch | T: Theme | q: Quit"
 	case FocusMain:
 		if m.Tabs.HasTabs() {
-			return "j/k/h/l: Navigate | PgUp/PgDn: Page | /: Filter | C: Clear Filter | Tab: Switch | T: Theme | q: Quit"
+			if !m.sidebarCollapsed {
+				return "j/k/h/l: Navigate | PgUp/PgDn: Page | /: Filter | C: Clear Filter | s: Toggle Sidebar | Tab: Switch | T: Theme | q: Quit"
+			}
+			return "j/k/h/l: Navigate | PgUp/PgDn: Page | /: Filter | C: Clear Filter | s: Toggle Sidebar | T: Theme | q: Quit"
 		}
-		return "Tab: Switch | T: Theme | q: Quit"
+		if !m.sidebarCollapsed {
+			return "s: Toggle Sidebar | Tab: Switch | T: Theme | q: Quit"
+		}
+		return "s: Toggle Sidebar | T: Theme | q: Quit"
 	case FocusFilter:
 		return "Tab/h/l: Switch Field | j/k: Navigate Options | Enter: Apply | Esc: Cancel | Ctrl+C: Clear"
 	case FocusExitModal:
