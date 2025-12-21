@@ -1,6 +1,8 @@
 # sq
 
-A terminal-based database client built with [Bubble Tea](https://github.com/charmbracelet/bubbletea) TUI framework for Go. Features a multi-pane layout with keyboard-driven navigation following vim-like patterns.
+A keyboard-first SQL TUI built for VIM users [Bubble Tea](https://github.com/charmbracelet/bubbletea) TUI framework for Go.
+It focuses on speed, clarity, and terminal-native workflows—no mouse,
+no clutter, just efficient querying inside terminal but with the beautifull UI
 
 **Status**: Active development - MySQL support available.
 
