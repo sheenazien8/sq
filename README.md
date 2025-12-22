@@ -8,7 +8,7 @@ no clutter, just efficient querying inside terminal but with the beautifull UI
 
 ## Demo
 
-https://youtu.be/75TUZbeAte8
+[Demo](https://vhs.charm.sh/vhs-5x9GacBnw5gMMeURxa1uC2.gif)
 
 ## Installation
 
