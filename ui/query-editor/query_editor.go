@@ -3,10 +3,10 @@ package queryeditor
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/sheenazien8/sq/logger"
+	"github.com/sheenazien8/sq/ui/syntax-editor"
 	"github.com/sheenazien8/sq/ui/table"
 	"github.com/sheenazien8/sq/ui/theme"
 )
@@ -46,7 +46,7 @@ type YankCellMsg struct {
 
 // Model represents the query editor component
 type Model struct {
-	textarea       textarea.Model
+	syntaxEditor   syntaxeditor.Model
 	resultTable    table.Model
 	connectionName string
 	databaseName   string
@@ -63,16 +63,16 @@ type Model struct {
 
 // New creates a new query editor model
 func New(connectionName, databaseName string) Model {
-	ta := textarea.New()
-	ta.Placeholder = "Enter your SQL query here...\nPress F5 or Ctrl+E to execute\nVim mode enabled (press i to insert, Esc for normal)"
-	ta.SetWidth(80)
-	ta.SetHeight(5)
-	ta.CharLimit = 0 // No character limit
-	// Keep textarea focused so cursor is visible
-	ta.Focus()
+	se := syntaxeditor.New()
+	se.SetPlaceholder("Enter your SQL query here...\nPress F5 or Ctrl+E to execute\nVim mode enabled (press i to insert, Esc for normal)")
+	se.SetBorder(false) // Query editor provides its own border
+	se.SetSize(80, 5)
+	se.SetCharLimit(0) // No character limit
+	// Keep editor focused so cursor is visible
+	se.Focus()
 
 	return Model{
-		textarea:       ta,
+		syntaxEditor:   se,
 		connectionName: connectionName,
 		databaseName:   databaseName,
 		focused:        true,
@@ -97,9 +97,8 @@ func (m *Model) SetSize(width, height int) {
 		m.resultHeight = 0
 	}
 
-	// Set textarea size (account for borders and padding)
-	m.textarea.SetWidth(width - 4)
-	m.textarea.SetHeight(m.editorHeight - 2)
+	// Set syntax editor size (account for borders and padding)
+	m.syntaxEditor.SetSize(width-4, m.editorHeight-2)
 
 	// Set result table size if showing results
 	if m.showResults && m.resultHeight > 0 {
@@ -111,9 +110,9 @@ func (m *Model) SetSize(width, height int) {
 func (m *Model) SetFocused(focused bool) {
 	m.focused = focused
 	if focused {
-		m.textarea.Focus()
+		m.syntaxEditor.Focus()
 	} else {
-		m.textarea.Blur()
+		m.syntaxEditor.Blur()
 	}
 }
 
@@ -124,12 +123,12 @@ func (m Model) Focused() bool {
 
 // GetQuery returns the current query text
 func (m Model) GetQuery() string {
-	return strings.TrimSpace(m.textarea.Value())
+	return strings.TrimSpace(m.syntaxEditor.Value())
 }
 
 // SetQuery sets the query text
 func (m *Model) SetQuery(query string) {
-	m.textarea.SetValue(query)
+	m.syntaxEditor.SetValue(query)
 }
 
 // GetConnectionName returns the connection name
@@ -208,11 +207,11 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				if m.resultTable.Focused() {
 					// Switch from results to editor
 					m.resultTable.SetFocused(false)
-					m.textarea.Focus()
+					m.syntaxEditor.Focus()
 					m.vimMode = VimNormal
 				} else {
 					// Switch from editor to results
-					m.textarea.Blur()
+					m.syntaxEditor.Blur()
 					m.resultTable.SetFocused(true)
 				}
 			}
@@ -225,7 +224,8 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			if keyStr == "i" || keyStr == "a" {
 				m.resultTable.SetFocused(false)
 				m.vimMode = VimInsert
-				m.textarea.Focus()
+				m.syntaxEditor.SetCursorStyle(syntaxeditor.CursorLine)
+				m.syntaxEditor.Focus()
 				return m, nil
 			}
 			// Preview cell content
@@ -258,8 +258,8 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			return m.handleVimInput(msg)
 		}
 
-		// Non-vim mode: pass directly to textarea
-		m.textarea, cmd = m.textarea.Update(msg)
+		// Non-vim mode: pass directly to syntax editor
+		m.syntaxEditor, cmd = m.syntaxEditor.Update(msg)
 		cmds = append(cmds, cmd)
 	}
 
@@ -278,11 +278,12 @@ func (m Model) handleVimInput(msg tea.KeyMsg) (Model, tea.Cmd) {
 		// Escape returns to normal mode
 		if keyStr == "esc" {
 			m.vimMode = VimNormal
-			// Keep textarea focused so cursor remains visible
+			// Switch to block cursor for normal mode
+			m.syntaxEditor.SetCursorStyle(syntaxeditor.CursorBlock)
 			return m, nil
 		}
-		// In insert mode, pass everything to textarea
-		m.textarea, cmd = m.textarea.Update(msg)
+		// In insert mode, pass everything to syntax editor
+		m.syntaxEditor, cmd = m.syntaxEditor.Update(msg)
 		return m, cmd
 	}
 
@@ -297,92 +298,98 @@ func (m Model) handleVimNormal(msg tea.KeyMsg) (Model, tea.Cmd) {
 	// Enter insert mode
 	case "i":
 		m.vimMode = VimInsert
+		m.syntaxEditor.SetCursorStyle(syntaxeditor.CursorLine)
 		return m, nil
 	case "a":
 		m.vimMode = VimInsert
+		m.syntaxEditor.SetCursorStyle(syntaxeditor.CursorLine)
 		// Move cursor right (append) - send right arrow key
-		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyRight})
+		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyRight})
 		return m, nil
 	case "I":
 		m.vimMode = VimInsert
+		m.syntaxEditor.SetCursorStyle(syntaxeditor.CursorLine)
 		// Move to beginning of line
-		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyHome})
+		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyHome})
 		return m, nil
 	case "A":
 		m.vimMode = VimInsert
+		m.syntaxEditor.SetCursorStyle(syntaxeditor.CursorLine)
 		// Move to end of line
-		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyEnd})
+		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyEnd})
 		return m, nil
 	case "o":
 		m.vimMode = VimInsert
+		m.syntaxEditor.SetCursorStyle(syntaxeditor.CursorLine)
 		// Move to end of line and insert newline
-		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyEnd})
-		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyEnter})
+		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyEnd})
+		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyEnter})
 		return m, nil
 	case "O":
 		m.vimMode = VimInsert
+		m.syntaxEditor.SetCursorStyle(syntaxeditor.CursorLine)
 		// Move to beginning of line and insert newline above
-		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyHome})
-		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyEnter})
-		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyUp})
+		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyHome})
+		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyEnter})
+		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyUp})
 		return m, nil
 
 	// Navigation - use arrow keys directly
 	case "h":
-		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyLeft})
+		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyLeft})
 		return m, nil
 	case "j":
-		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyDown})
+		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyDown})
 		return m, nil
 	case "k":
-		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyUp})
+		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyUp})
 		return m, nil
 	case "l":
-		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyRight})
+		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyRight})
 		return m, nil
 	case "left":
-		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyLeft})
+		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyLeft})
 		return m, nil
 	case "down":
-		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyDown})
+		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyDown})
 		return m, nil
 	case "up":
-		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyUp})
+		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyUp})
 		return m, nil
 	case "right":
-		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyRight})
+		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyRight})
 		return m, nil
 	case "0":
-		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyHome})
+		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyHome})
 		return m, nil
 	case "$":
-		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyEnd})
+		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyEnd})
 		return m, nil
 	case "g":
 		// gg - go to beginning (simplified, just g for now)
-		m.textarea.CursorStart()
+		m.syntaxEditor.CursorStart()
 		return m, nil
 	case "G":
 		// G - go to end
-		m.textarea.CursorEnd()
+		m.syntaxEditor.CursorEnd()
 		return m, nil
 	case "w":
 		// Move word forward
-		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyCtrlRight})
+		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyCtrlRight})
 		return m, nil
 	case "b":
 		// Move word backward
-		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyCtrlLeft})
+		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyCtrlLeft})
 		return m, nil
 
 	// Deletion
 	case "x":
 		// Delete character under cursor
-		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyDelete})
+		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyDelete})
 		return m, nil
 	case "X":
 		// Delete character before cursor (backspace)
-		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyBackspace})
 		return m, nil
 	case "d":
 		// For simplicity, 'd' alone does nothing - would need 'dd' detection
@@ -390,8 +397,8 @@ func (m Model) handleVimNormal(msg tea.KeyMsg) (Model, tea.Cmd) {
 
 	// Undo (if supported by textarea)
 	case "u":
-		// Textarea doesn't have built-in undo, but try ctrl+z
-		m.textarea, _ = m.textarea.Update(tea.KeyMsg{Type: tea.KeyCtrlZ})
+		// Editor doesn't have built-in undo, but try ctrl+z
+		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyCtrlZ})
 		return m, nil
 	}
 
@@ -432,7 +439,7 @@ func (m Model) View() string {
 		Width(m.width - 4).
 		Height(m.editorHeight - 2)
 
-	editorContent := m.textarea.View()
+	editorContent := m.syntaxEditor.View()
 	editorSection := lipgloss.JoinVertical(lipgloss.Left,
 		editorTitle,
 		editorStyle.Render(editorContent),
