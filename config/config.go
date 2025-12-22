@@ -12,7 +12,7 @@ import (
 
 // Config holds the application configuration
 type Config struct {
-	Theme string `json:"theme"`
+	Theme  string            `json:"theme"`
 }
 
 // SQLSConfig represents the sqls LSP server configuration
@@ -112,15 +112,12 @@ func (c *Config) Save() error {
 func (c *Config) SetTheme(themeName string) {
 	c.Theme = themeName
 }
-
 // GenerateSQLSConfig generates a sqls configuration from saved database connections
 func GenerateSQLSConfig() (*SQLSConfig, error) {
 	connections, err := storage.GetAllConnections()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get connections: %w", err)
 	}
-
-	fmt.Printf("Found %d database connections for LSP config\n", len(connections))
 
 	config := &SQLSConfig{
 		LowercaseKeywords: false,
@@ -133,23 +130,74 @@ func GenerateSQLSConfig() (*SQLSConfig, error) {
 			Driver: conn.Driver,
 		}
 
-		// For MySQL, use dataSourceName format
-		if conn.Driver == "mysql" {
+		// Convert URL to proper DSN format for sqls
+		// sqls expects: user:password@tcp(host:port)/dbname for MySQL
+		dsn, err := convertURLToDSN(conn.URL, conn.Driver)
+		if err != nil {
+			// If conversion fails, try using the URL as-is
 			sqlsConn.DataSourceName = conn.URL
 		} else {
-			// For other drivers, we could parse the URL, but for now just use dataSourceName
-			sqlsConn.DataSourceName = conn.URL
+			sqlsConn.DataSourceName = dsn
 		}
 
 		config.Connections = append(config.Connections, sqlsConn)
-		fmt.Printf("Added connection: %s (%s)\n", conn.Name, conn.Driver)
-	}
-
-	if len(config.Connections) == 0 {
-		fmt.Println("Warning: No database connections found. LSP completion will not work without connections.")
 	}
 
 	return config, nil
+}
+
+// convertURLToDSN converts a database URL to DSN format for sqls
+func convertURLToDSN(url string, driver string) (string, error) {
+	// Parse URL format: mysql://user:password@host:port/dbname
+	// Convert to DSN: user:password@tcp(host:port)/dbname
+
+	if driver == "mysql" {
+		// Remove mysql:// prefix
+		dsn := url
+		if len(dsn) > 8 && dsn[:8] == "mysql://" {
+			dsn = dsn[8:]
+		}
+
+		// Find @ separator
+		atIdx := -1
+		for i := 0; i < len(dsn); i++ {
+			if dsn[i] == '@' {
+				atIdx = i
+				break
+			}
+		}
+
+		if atIdx == -1 {
+			return url, nil // No credentials, return as-is
+		}
+
+		userPass := dsn[:atIdx]
+		hostPath := dsn[atIdx+1:]
+
+		// Find / separator for host:port/dbname
+		slashIdx := -1
+		for i := 0; i < len(hostPath); i++ {
+			if hostPath[i] == '/' {
+				slashIdx = i
+				break
+			}
+		}
+
+		var host, dbName string
+		if slashIdx == -1 {
+			host = hostPath
+			dbName = ""
+		} else {
+			host = hostPath[:slashIdx]
+			dbName = hostPath[slashIdx+1:]
+		}
+
+		// Build DSN: user:password@tcp(host:port)/dbname
+		return fmt.Sprintf("%s@tcp(%s)/%s", userPass, host, dbName), nil
+	}
+
+	// For other drivers, return as-is
+	return url, nil
 }
 
 // SaveSQLSConfig saves the sqls configuration to the config directory

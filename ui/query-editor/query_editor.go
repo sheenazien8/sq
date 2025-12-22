@@ -70,6 +70,7 @@ type Model struct {
 	documentVersion int
 	lspInitialized  bool
 	lspInitPending  bool
+	lspInitStarted  bool // Prevent multiple initialization attempts
 }
 
 // New creates a new query editor model
@@ -110,6 +111,7 @@ func New(connectionName, databaseName string) Model {
 		documentURI:     documentURI,
 		documentVersion: 1,
 		lspInitialized:  false,
+		lspInitStarted:  false,
 	}
 }
 
@@ -141,13 +143,16 @@ func (m *Model) SetSize(width, height int) {
 
 // SetFocused sets whether the query editor is focused
 func (m *Model) SetFocused(focused bool) {
+	logger.Debug("QueryEditor SetFocused called", map[string]any{
+		"focused":        focused,
+		"lspInitialized": m.lspInitialized,
+		"lspInitPending": m.lspInitPending,
+		"lspInitStarted": m.lspInitStarted,
+	})
 	m.focused = focused
 	if focused {
 		m.syntaxEditor.Focus()
-		// Mark LSP init as pending if not initialized
-		if !m.lspInitialized && !m.lspInitPending {
-			m.lspInitPending = true
-		}
+		// Don't auto-initialize LSP - wait for user to request completion
 	} else {
 		m.syntaxEditor.Blur()
 	}
@@ -208,54 +213,45 @@ func (m Model) GetError() string {
 // InitLSP initializes the LSP client and server
 func (m *Model) InitLSP() tea.Cmd {
 	return func() tea.Msg {
-		logger.Debug("Starting LSP initialization", map[string]any{
-			"connectionName": m.connectionName,
-			"databaseName":   m.databaseName,
-			"documentURI":    m.documentURI,
-		})
+		logger.Debug("InitLSP command function STARTED", nil)
 
 		// Check if we have any database connections first
 		connections, err := storage.GetAllConnections()
 		if err != nil {
 			logger.Debug("Failed to check database connections", map[string]any{"error": err.Error()})
-			return nil
+			return LSPInitializedMsg{Success: false, Error: err.Error()}
 		}
 
 		if len(connections) == 0 {
 			logger.Debug("No database connections found - LSP will not initialize", nil)
-			return nil
+			return LSPInitializedMsg{Success: false, Error: "no database connections"}
 		}
-
-		logger.Debug("Found database connections, proceeding with LSP init", map[string]any{"count": len(connections)})
 
 		// Generate and save sqls config
 		if err := config.SaveSQLSConfig(); err != nil {
 			logger.Debug("Failed to save SQLS config", map[string]any{"error": err.Error()})
-			return nil
+			return LSPInitializedMsg{Success: false, Error: err.Error()}
 		}
 
 		configPath, err := config.GetSQLSConfigPath()
 		if err != nil {
 			logger.Debug("Failed to get SQLS config path", map[string]any{"error": err.Error()})
-			return nil
+			return LSPInitializedMsg{Success: false, Error: err.Error()}
 		}
 
-		logger.Debug("SQLS config saved", map[string]any{"configPath": configPath})
-
-		// Check if sqls command exists
-		if m.lspClient == nil {
-			m.lspClient = lsp.NewClientWithConfig(configPath)
-		}
+		// Create new LSP client with config
+		lspClient := lsp.NewClientWithConfig(configPath)
 
 		logger.Debug("Starting LSP client", nil)
-		if err := m.lspClient.Start(); err != nil {
+		// Start the client (this might be what's slow)
+		if err := lspClient.Start(); err != nil {
 			logger.Debug("Failed to start LSP client", map[string]any{"error": err.Error()})
-			return nil
+			return LSPInitializedMsg{Success: false, Error: err.Error()}
 		}
 
-		logger.Debug("LSP client started, initializing server", nil)
+		logger.Debug("LSP client started, doing quick init", nil)
 
-		// Initialize LSP server
+		// Do minimal initialization - just initialize, don't do full handshake yet
 		capabilities := map[string]interface{}{
 			"textDocument": map[string]interface{}{
 				"completion": map[string]interface{}{
@@ -266,32 +262,43 @@ func (m *Model) InitLSP() tea.Cmd {
 			},
 		}
 
-		response, err := m.lspClient.Initialize("file:///"+m.connectionName, capabilities)
+		_, err = lspClient.Initialize(m.documentURI, capabilities)
 		if err != nil {
 			logger.Debug("Failed to initialize LSP server", map[string]any{"error": err.Error()})
-			return nil
+			lspClient.Stop()
+			return LSPInitializedMsg{Success: false, Error: err.Error()}
 		}
 
-		logger.Debug("LSP server initialized", map[string]any{"response": response})
-
 		// Send initialized notification
-		if err := m.lspClient.Initialized(); err != nil {
+		if err := lspClient.Initialized(); err != nil {
 			logger.Debug("Failed to send initialized notification", map[string]any{"error": err.Error()})
-			return nil
+			lspClient.Stop()
+			return LSPInitializedMsg{Success: false, Error: err.Error()}
 		}
 
 		// Send didOpen for current document
 		text := m.GetQuery()
-		logger.Debug("Sending didOpen notification", map[string]any{"textLength": len(text)})
-		if err := m.lspClient.DidOpen(m.documentURI, "sql", text); err != nil {
+		logger.Debug("Sending didOpen notification", map[string]any{"uri": m.documentURI, "textLength": len(text)})
+		if err := lspClient.DidOpen(m.documentURI, "sql", text); err != nil {
 			logger.Debug("Failed to send didOpen notification", map[string]any{"error": err.Error()})
-			return nil
+			lspClient.Stop()
+			return LSPInitializedMsg{Success: false, Error: err.Error()}
 		}
 
-		m.lspInitialized = true
-		logger.Debug("LSP initialization completed successfully", nil)
+		logger.Debug("LSP initialization completed with didOpen", nil)
 
-		return nil
+		msg := LSPInitializedMsg{
+			Success: true,
+			Client:  lspClient,
+			DocURI:  m.documentURI,
+		}
+		logger.Debug("Returning LSPInitializedMsg", map[string]any{
+			"success":   msg.Success,
+			"hasClient": msg.Client != nil,
+			"docURI":    msg.DocURI,
+		})
+		logger.Debug("InitLSP command function ENDING", nil)
+		return msg
 	}
 }
 
@@ -311,12 +318,82 @@ func (m Model) getCursorPosition() (int, int) {
 
 // triggerCompletion triggers LSP completion at current cursor position
 func (m *Model) triggerCompletion() tea.Cmd {
+	// Initialize LSP lazily if not already initialized
 	if !m.lspInitialized {
-		return nil
+		logger.Debug("LSP not initialized, initializing now", nil)
+
+		// Synchronous LSP initialization - return a command that will send LSPInitializedMsg
+		return func() tea.Msg {
+			connections, err := storage.GetAllConnections()
+			if err != nil || len(connections) == 0 {
+				logger.Debug("No database connections for LSP", nil)
+				return nil
+			}
+
+			if err := config.SaveSQLSConfig(); err != nil {
+				logger.Debug("Failed to save SQLS config", map[string]any{"error": err.Error()})
+				return nil
+			}
+
+			configPath, err := config.GetSQLSConfigPath()
+			if err != nil {
+				logger.Debug("Failed to get SQLS config path", map[string]any{"error": err.Error()})
+				return nil
+			}
+
+			lspClient := lsp.NewClientWithConfig(configPath)
+			if err := lspClient.Start(); err != nil {
+				logger.Debug("Failed to start LSP client", map[string]any{"error": err.Error()})
+				return nil
+			}
+
+			capabilities := map[string]interface{}{
+				"textDocument": map[string]interface{}{
+					"completion": map[string]interface{}{
+						"completionItem": map[string]interface{}{
+							"snippetSupport": false,
+						},
+					},
+				},
+			}
+
+			_, err = lspClient.Initialize(m.documentURI, capabilities)
+			if err != nil {
+				logger.Debug("Failed to initialize LSP server", map[string]any{"error": err.Error()})
+				lspClient.Stop()
+				return nil
+			}
+
+			if err := lspClient.Initialized(); err != nil {
+				logger.Debug("Failed to send initialized notification", map[string]any{"error": err.Error()})
+				lspClient.Stop()
+				return nil
+			}
+
+			text := m.GetQuery()
+			if err := lspClient.DidOpen(m.documentURI, "sql", text); err != nil {
+				logger.Debug("Failed to send didOpen notification", map[string]any{"error": err.Error()})
+				lspClient.Stop()
+				return nil
+			}
+
+			logger.Debug("LSP initialized for completion", nil)
+			return LSPInitializedMsg{
+				Success: true,
+				Client:  lspClient,
+				DocURI:  m.documentURI,
+			}
+		}
 	}
 
+	// LSP is already initialized, do completion
 	return func() tea.Msg {
 		line, character := m.getCursorPosition()
+		logger.Debug("Requesting completion", map[string]any{
+			"uri":       m.documentURI,
+			"line":      line,
+			"character": character,
+		})
 
 		response, err := m.lspClient.Completion(m.documentURI, line, character)
 		if err != nil {
@@ -324,9 +401,12 @@ func (m *Model) triggerCompletion() tea.Cmd {
 			return nil
 		}
 
+		logger.Debug("Received completion response", map[string]any{"response": response})
+
 		// Parse completion items from response
 		if items, ok := response.Result.(map[string]interface{}); ok {
 			if itemList, ok := items["items"].([]interface{}); ok {
+				logger.Debug("Found completion items", map[string]any{"count": len(itemList)})
 				completionItems := make([]completion.CompletionItem, 0, len(itemList))
 				for _, item := range itemList {
 					if itemMap, ok := item.(map[string]interface{}); ok {
@@ -351,9 +431,16 @@ func (m *Model) triggerCompletion() tea.Cmd {
 				}
 
 				if len(completionItems) > 0 {
+					logger.Debug("Returning completion items", map[string]any{"count": len(completionItems)})
 					return LSPCompletionMsg{Items: completionItems}
+				} else {
+					logger.Debug("No completion items found", nil)
 				}
+			} else {
+				logger.Debug("No 'items' field in completion response", map[string]any{"result": items})
 			}
+		} else {
+			logger.Debug("Unexpected completion response format", map[string]any{"result": response.Result})
 		}
 
 		return nil
@@ -365,12 +452,40 @@ type LSPCompletionMsg struct {
 	Items []completion.CompletionItem
 }
 
+// LSPInitializedMsg is sent when LSP initialization completes
+type LSPInitializedMsg struct {
+	Success bool
+	Error   string
+	Client  *lsp.Client
+	DocURI  string
+}
+
 // Update handles input
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case LSPInitializedMsg:
+		// Handle LSP initialization completion
+		logger.Debug("LSPInitializedMsg received", map[string]any{
+			"success":   msg.Success,
+			"error":     msg.Error,
+			"hasClient": msg.Client != nil,
+		})
+		m.lspInitStarted = false // Reset the started flag
+		if msg.Success && msg.Client != nil {
+			m.lspClient = msg.Client
+			m.lspInitialized = true
+			m.documentURI = msg.DocURI
+			logger.Debug("LSP client stored in model", map[string]any{
+				"initialized": true,
+				"documentURI": msg.DocURI,
+			})
+		} else {
+			logger.Debug("LSP initialization failed", map[string]any{"error": msg.Error})
+		}
+		return m, nil
 	case LSPCompletionMsg:
 		// Handle LSP completion response
 		m.completionUI.SetItems(msg.Items)
@@ -516,15 +631,10 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			}()
 		}
 
-		// Initialize LSP if pending
-		if m.lspInitPending && !m.lspInitialized {
-			m.lspInitPending = false
-			initCmd := m.InitLSP()
-			cmds = append(cmds, initCmd)
-		}
+		return m, tea.Batch(cmds...)
+	default:
+		return m, nil
 	}
-
-	return m, tea.Batch(cmds...)
 }
 
 // handleVimInput processes input based on current vim mode
