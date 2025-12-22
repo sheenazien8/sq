@@ -651,6 +651,9 @@ func (m *Model) AddQueryTab(name, connectionName, databaseName string) {
 	qe.SetSize(m.width, m.height-3)
 	qe.SetFocused(m.focused)
 
+	// Initialize LSP for the query editor
+	// Note: LSP initialization is done asynchronously in the query editor
+
 	newTab := Tab{
 		Name:    name,
 		Content: qe,

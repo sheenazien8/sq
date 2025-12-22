@@ -1,12 +1,17 @@
 package queryeditor
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sheenazien8/sq/config"
 	"github.com/sheenazien8/sq/logger"
+	"github.com/sheenazien8/sq/lsp"
+	"github.com/sheenazien8/sq/storage"
+	"github.com/sheenazien8/sq/ui/completion"
 	"github.com/sheenazien8/sq/ui/table"
 	"github.com/sheenazien8/sq/ui/theme"
 )
@@ -46,40 +51,65 @@ type YankCellMsg struct {
 
 // Model represents the query editor component
 type Model struct {
-	textarea       textarea.Model
-	resultTable    table.Model
-	connectionName string
-	databaseName   string
-	width          int
-	height         int
-	focused        bool
-	showResults    bool
-	lastError      string
-	editorHeight   int // Height of the editor area
-	resultHeight   int // Height of the result area
-	vimMode        VimMode
-	vimEnabled     bool
+	textarea        textarea.Model
+	resultTable     table.Model
+	lspClient       *lsp.Client
+	completionUI    completion.Model
+	connectionName  string
+	databaseName    string
+	width           int
+	height          int
+	focused         bool
+	showResults     bool
+	lastError       string
+	editorHeight    int // Height of the editor area
+	resultHeight    int // Height of the result area
+	vimMode         VimMode
+	vimEnabled      bool
+	documentURI     string
+	documentVersion int
+	lspInitialized  bool
+	lspInitPending  bool
 }
 
 // New creates a new query editor model
 func New(connectionName, databaseName string) Model {
 	ta := textarea.New()
-	ta.Placeholder = "Enter your SQL query here...\nPress F5 or Ctrl+E to execute\nVim mode enabled (press i to insert, Esc for normal)"
+	ta.Placeholder = "Enter your SQL query here...\nPress F5 or Ctrl+E to execute\nVim mode enabled (press i to insert, Esc for normal)\nLSP: F2 or Ctrl+Space for completion (requires database connections)"
 	ta.SetWidth(80)
 	ta.SetHeight(5)
 	ta.CharLimit = 0 // No character limit
 	// Keep textarea focused so cursor is visible
 	ta.Focus()
 
+	// Generate sqls config and create LSP client
+	if err := config.SaveSQLSConfig(); err != nil {
+		logger.Debug("Failed to save sqls config", map[string]any{"error": err.Error()})
+	}
+
+	configPath, _ := config.GetSQLSConfigPath()
+	lspClient := lsp.NewClientWithConfig(configPath)
+
+	// Create completion UI
+	compUI := completion.New()
+
+	// Generate document URI
+	documentURI := fmt.Sprintf("file:///%s_%s.sql", connectionName, databaseName)
+
 	return Model{
-		textarea:       ta,
-		connectionName: connectionName,
-		databaseName:   databaseName,
-		focused:        true,
-		showResults:    false,
-		editorHeight:   8,
-		vimMode:        VimNormal,
-		vimEnabled:     true,
+		textarea:        ta,
+		lspClient:       lspClient,
+		completionUI:    compUI,
+		connectionName:  connectionName,
+		databaseName:    databaseName,
+		focused:         true,
+		showResults:     false,
+		editorHeight:    8,
+		vimMode:         VimNormal,
+		vimEnabled:      true,
+		documentURI:     documentURI,
+		documentVersion: 1,
+		lspInitialized:  false,
 	}
 }
 
@@ -105,6 +135,9 @@ func (m *Model) SetSize(width, height int) {
 	if m.showResults && m.resultHeight > 0 {
 		m.resultTable.SetSize(width-4, m.resultHeight-2)
 	}
+
+	// Set completion UI size
+	m.completionUI.SetSize(40, 10, 10, m.editorHeight+2)
 }
 
 // SetFocused sets whether the query editor is focused
@@ -112,6 +145,10 @@ func (m *Model) SetFocused(focused bool) {
 	m.focused = focused
 	if focused {
 		m.textarea.Focus()
+		// Mark LSP init as pending if not initialized
+		if !m.lspInitialized && !m.lspInitPending {
+			m.lspInitPending = true
+		}
 	} else {
 		m.textarea.Blur()
 	}
@@ -169,12 +206,180 @@ func (m Model) GetError() string {
 	return m.lastError
 }
 
+// InitLSP initializes the LSP client and server
+func (m *Model) InitLSP() tea.Cmd {
+	return func() tea.Msg {
+		logger.Debug("Starting LSP initialization", map[string]any{
+			"connectionName": m.connectionName,
+			"databaseName":   m.databaseName,
+			"documentURI":    m.documentURI,
+		})
+
+		// Check if we have any database connections first
+		connections, err := storage.GetAllConnections()
+		if err != nil {
+			logger.Debug("Failed to check database connections", map[string]any{"error": err.Error()})
+			return nil
+		}
+
+		if len(connections) == 0 {
+			logger.Debug("No database connections found - LSP will not initialize", nil)
+			return nil
+		}
+
+		logger.Debug("Found database connections, proceeding with LSP init", map[string]any{"count": len(connections)})
+
+		// Generate and save sqls config
+		if err := config.SaveSQLSConfig(); err != nil {
+			logger.Debug("Failed to save SQLS config", map[string]any{"error": err.Error()})
+			return nil
+		}
+
+		configPath, err := config.GetSQLSConfigPath()
+		if err != nil {
+			logger.Debug("Failed to get SQLS config path", map[string]any{"error": err.Error()})
+			return nil
+		}
+
+		logger.Debug("SQLS config saved", map[string]any{"configPath": configPath})
+
+		// Check if sqls command exists
+		if m.lspClient == nil {
+			m.lspClient = lsp.NewClientWithConfig(configPath)
+		}
+
+		logger.Debug("Starting LSP client", nil)
+		if err := m.lspClient.Start(); err != nil {
+			logger.Debug("Failed to start LSP client", map[string]any{"error": err.Error()})
+			return nil
+		}
+
+		logger.Debug("LSP client started, initializing server", nil)
+
+		// Initialize LSP server
+		capabilities := map[string]interface{}{
+			"textDocument": map[string]interface{}{
+				"completion": map[string]interface{}{
+					"completionItem": map[string]interface{}{
+						"snippetSupport": false,
+					},
+				},
+			},
+		}
+
+		response, err := m.lspClient.Initialize("file:///"+m.connectionName, capabilities)
+		if err != nil {
+			logger.Debug("Failed to initialize LSP server", map[string]any{"error": err.Error()})
+			return nil
+		}
+
+		logger.Debug("LSP server initialized", map[string]any{"response": response})
+
+		// Send initialized notification
+		if err := m.lspClient.Initialized(); err != nil {
+			logger.Debug("Failed to send initialized notification", map[string]any{"error": err.Error()})
+			return nil
+		}
+
+		// Send didOpen for current document
+		text := m.GetQuery()
+		logger.Debug("Sending didOpen notification", map[string]any{"textLength": len(text)})
+		if err := m.lspClient.DidOpen(m.documentURI, "sql", text); err != nil {
+			logger.Debug("Failed to send didOpen notification", map[string]any{"error": err.Error()})
+			return nil
+		}
+
+		m.lspInitialized = true
+		logger.Debug("LSP initialization completed successfully", nil)
+
+		return nil
+	}
+}
+
+// ShutdownLSP shuts down the LSP client
+func (m *Model) ShutdownLSP() {
+	if m.lspClient != nil {
+		m.lspClient.Stop()
+	}
+}
+
+// getCursorPosition returns the current cursor position as line and character
+func (m Model) getCursorPosition() (int, int) {
+	// Get current line and column from textarea
+	// This is a simplified implementation - bubbles/textarea doesn't expose
+	// cursor position directly, so we'll use line/column info
+	line := m.textarea.Line()
+	col := m.textarea.LineInfo().ColumnOffset
+
+	return line, col
+}
+
+// triggerCompletion triggers LSP completion at current cursor position
+func (m *Model) triggerCompletion() tea.Cmd {
+	if !m.lspInitialized {
+		return nil
+	}
+
+	return func() tea.Msg {
+		line, character := m.getCursorPosition()
+
+		response, err := m.lspClient.Completion(m.documentURI, line, character)
+		if err != nil {
+			logger.Debug("Failed to get completion", map[string]any{"error": err.Error()})
+			return nil
+		}
+
+		// Parse completion items from response
+		if items, ok := response.Result.(map[string]interface{}); ok {
+			if itemList, ok := items["items"].([]interface{}); ok {
+				completionItems := make([]completion.CompletionItem, 0, len(itemList))
+				for _, item := range itemList {
+					if itemMap, ok := item.(map[string]interface{}); ok {
+						var compItem completion.CompletionItem
+						if label, ok := itemMap["label"].(string); ok {
+							compItem.Label = label
+						}
+						if kind, ok := itemMap["kind"].(float64); ok {
+							compItem.Kind = int(kind)
+						}
+						if detail, ok := itemMap["detail"].(string); ok {
+							compItem.Detail = detail
+						}
+						if insertText, ok := itemMap["insertText"].(string); ok {
+							compItem.InsertText = insertText
+						} else {
+							compItem.InsertText = compItem.Label
+						}
+
+						completionItems = append(completionItems, compItem)
+					}
+				}
+
+				if len(completionItems) > 0 {
+					return LSPCompletionMsg{Items: completionItems}
+				}
+			}
+		}
+
+		return nil
+	}
+}
+
+// LSPCompletionMsg is sent when completion items are received
+type LSPCompletionMsg struct {
+	Items []completion.CompletionItem
+}
+
 // Update handles input
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
+	case LSPCompletionMsg:
+		// Handle LSP completion response
+		m.completionUI.SetItems(msg.Items)
+		return m, nil
 	case tea.KeyMsg:
 		keyStr := msg.String()
 		logger.Debug("QueryEditor received key", map[string]any{
@@ -200,6 +405,18 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 						DatabaseName:   m.databaseName,
 					}
 				}
+			}
+			return m, nil
+		case "ctrl+space", "ctrl+@", "ctrl+ ", "f2":
+			// Trigger LSP completion (Ctrl+Space is often interpreted as Ctrl+@ in terminals, Tab is alternative)
+			logger.Debug("LSP completion triggered", map[string]any{
+				"key":            keyStr,
+				"lspInitialized": m.lspInitialized,
+				"vimMode":        m.vimMode,
+			})
+			if m.lspInitialized && m.vimMode == VimInsert {
+				m.completionUI.Show()
+				return m, m.triggerCompletion()
 			}
 			return m, nil
 		case "ctrl+r":
@@ -253,14 +470,66 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			return m, cmd
 		}
 
+		// Handle completion UI if visible
+		if m.completionUI.Visible() {
+			var compCmd tea.Cmd
+			m.completionUI, compCmd = m.completionUI.Update(msg)
+			cmds = append(cmds, compCmd)
+
+			if m.completionUI.Selected() {
+				// Insert selected completion item
+				selectedItem := m.completionUI.SelectedItem()
+				if selectedItem.InsertText != "" {
+					// Use textarea's insert functionality - simpler approach
+					// Send the insert text as key input to textarea
+					for _, r := range selectedItem.InsertText {
+						keyMsg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}}
+						m.textarea, _ = m.textarea.Update(keyMsg)
+					}
+
+					// Send LSP didChange notification
+					if m.lspInitialized {
+						newText := m.textarea.Value()
+						m.documentVersion++
+						go func() {
+							if err := m.lspClient.DidChange(m.documentURI, newText, m.documentVersion); err != nil {
+								logger.Debug("Failed to send didChange notification", map[string]any{"error": err.Error()})
+							}
+						}()
+					}
+				}
+				m.completionUI.Hide()
+			}
+			return m, tea.Batch(cmds...)
+		}
+
 		// Handle vim modes
 		if m.vimEnabled {
 			return m.handleVimInput(msg)
 		}
 
 		// Non-vim mode: pass directly to textarea
+		oldText := m.textarea.Value()
 		m.textarea, cmd = m.textarea.Update(msg)
 		cmds = append(cmds, cmd)
+
+		// Send LSP didChange notification if text changed
+		newText := m.textarea.Value()
+		if oldText != newText && m.lspInitialized {
+			m.documentVersion++
+			go func() {
+				if err := m.lspClient.DidChange(m.documentURI, newText, m.documentVersion); err != nil {
+					logger.Debug("Failed to send didChange notification", map[string]any{"error": err.Error()})
+				}
+			}()
+		}
+
+		// Initialize LSP if pending
+		if m.lspInitPending && !m.lspInitialized {
+			m.lspInitPending = false
+			initCmd := m.InitLSP()
+			cmds = append(cmds, initCmd)
+		}
 	}
 
 	return m, tea.Batch(cmds...)
@@ -459,9 +728,9 @@ func (m Model) View() string {
 	if m.showResults && m.resultTable.Focused() {
 		statusText = "hjkl: Navigate | p: Preview | y: Yank | i: Back to Editor | Ctrl+R: Editor"
 	} else if m.vimMode == VimNormal {
-		statusText = "i: Insert | hjkl: Navigate | F5: Execute | Ctrl+R: Results"
+		statusText = "i: Insert | hjkl: Navigate | F5: Execute | F2: Complete | Ctrl+R: Results"
 	} else {
-		statusText = "Esc: Normal | F5/Ctrl+E: Execute | Ctrl+R: Results"
+		statusText = "Esc: Normal | F2: Complete | F5/Ctrl+E: Execute | Ctrl+R: Results"
 	}
 	if m.lastError != "" {
 		statusText = lipgloss.NewStyle().
@@ -500,9 +769,17 @@ func (m Model) View() string {
 		)
 	}
 
+	// Render completion UI if visible
+	completionView := ""
+	if m.completionUI.Visible() {
+		// Position completion popup near cursor (simplified positioning)
+		completionView = m.completionUI.View()
+	}
+
 	return lipgloss.JoinVertical(lipgloss.Left,
 		editorSection,
 		statusBar,
+		completionView,
 	)
 }
 
