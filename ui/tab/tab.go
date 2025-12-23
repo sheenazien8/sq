@@ -46,12 +46,13 @@ const (
 
 // StructureView holds the table structure data and navigation state
 type StructureView struct {
-	Structure     *drivers.TableStructure
-	ActiveSection StructureSection
-	SectionTables map[StructureSection]table.Model
-	Width         int
-	Height        int
-	Focused       bool
+	Structure      *drivers.TableStructure
+	ActiveSection  StructureSection
+	SectionTables  map[StructureSection]table.Model
+	Width          int
+	Height         int
+	Focused        bool
+	AutoFitColumns bool
 }
 
 // NewStructureView creates a new structure view from table structure data
@@ -377,19 +378,35 @@ func intToStr(n int) string {
 
 // Model represents a tabbed interface for multiple tables
 type Model struct {
-	tabs      []Tab
-	activeTab int
-	width     int
-	height    int
-	focused   bool
+	tabs           []Tab
+	activeTab      int
+	width          int
+	height         int
+	focused        bool
+	autoFitColumns bool // Whether to auto-fit column widths
 }
 
 // New creates a new tab model
 func New() Model {
 	return Model{
-		tabs:      []Tab{},
-		activeTab: -1,
-		focused:   false,
+		tabs:           []Tab{},
+		activeTab:      -1,
+		focused:        false,
+		autoFitColumns: true, // Default to true
+	}
+}
+
+// SetAutoFitColumns sets whether tables should auto-fit column widths
+func (m *Model) SetAutoFitColumns(enabled bool) {
+	m.autoFitColumns = enabled
+	// Update all existing table tabs
+	for i := range m.tabs {
+		if m.tabs[i].Type == TabTypeTable {
+			if tbl, ok := m.tabs[i].Content.(table.Model); ok {
+				tbl.SetAutoFit(enabled)
+				m.tabs[i].Content = tbl
+			}
+		}
 	}
 }
 
@@ -577,6 +594,7 @@ func (m *Model) AddTableTab(name string, columns []table.Column, rows []table.Ro
 	newTable := table.New(columns, rows)
 	newTable.SetSize(m.width, m.height-3)
 	newTable.SetFocused(m.focused)
+	newTable.SetAutoFit(m.autoFitColumns) // Apply auto-fit setting from config
 	logger.Info("Adding table to tab", map[string]any{
 		"name": name,
 		"type": TabTypeTable,

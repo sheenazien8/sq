@@ -17,7 +17,7 @@ type PrevPageMsg struct{}
 // Column represents a table column with title and width
 type Column struct {
 	Title string
-	Width int
+	Width int // Default/max width
 }
 
 // Row is a slice of strings representing a table row
@@ -45,6 +45,9 @@ type Model struct {
 	totalPages  int
 	totalRows   int
 	pageSize    int
+
+	// Column auto-fit state
+	allColumnsAutoFit bool // Global toggle for all columns
 }
 
 // New creates a new table model
@@ -168,7 +171,7 @@ func (m Model) visibleCols() int {
 	count := 0
 
 	for i := m.colOffset; i < len(m.columns); i++ {
-		colWidth := m.columns[i].Width + 3
+		colWidth := m.getEffectiveColumnWidth(i) + 3 // +3 for padding and separator
 		if usedWidth+colWidth > m.width {
 			break
 		}
@@ -325,13 +328,22 @@ func (m Model) renderHeaderLine(startCol, endCol int) string {
 
 	for i := startCol; i < endCol; i++ {
 		col := m.columns[i]
-		cellText := truncateOrPad(col.Title, col.Width)
+		effectiveWidth := m.getEffectiveColumnWidth(i)
+		cellText := truncateOrPad(col.Title, effectiveWidth)
 		cell := t.TableHeader.Render(" " + cellText + " ")
 		cells = append(cells, cell)
 	}
 
 	separatorStyle := lipgloss.NewStyle().Foreground(t.Colors.BorderUnfocused)
-	return strings.Join(cells, separatorStyle.Render("│"))
+	line := strings.Join(cells, separatorStyle.Render("│"))
+
+	// Pad line to fill the available width
+	lineWidth := lipgloss.Width(line)
+	if lineWidth < m.width {
+		line = line + strings.Repeat(" ", m.width-lineWidth)
+	}
+
+	return line
 }
 
 // renderSeparator renders the separator between header and data
@@ -341,11 +353,19 @@ func (m Model) renderSeparator(startCol, endCol int) string {
 
 	var parts []string
 	for i := startCol; i < endCol; i++ {
-		col := m.columns[i]
-		parts = append(parts, strings.Repeat("─", col.Width+2))
+		effectiveWidth := m.getEffectiveColumnWidth(i)
+		parts = append(parts, strings.Repeat("─", effectiveWidth+2))
 	}
 
-	return separatorStyle.Render(strings.Join(parts, "┼"))
+	line := separatorStyle.Render(strings.Join(parts, "┼"))
+
+	// Pad line to fill the available width
+	lineWidth := lipgloss.Width(line)
+	if lineWidth < m.width {
+		line = line + strings.Repeat(" ", m.width-lineWidth)
+	}
+
+	return line
 }
 
 // renderDataRow renders a single data row
@@ -356,13 +376,13 @@ func (m Model) renderDataRow(rowIdx, startCol, endCol int) string {
 	isSelectedRow := rowIdx == m.cursorRow
 
 	for i := startCol; i < endCol; i++ {
-		col := m.columns[i]
+		effectiveWidth := m.getEffectiveColumnWidth(i)
 		cellContent := ""
 		if i < len(row) {
 			cellContent = row[i]
 		}
 
-		cellText := truncateOrPad(cellContent, col.Width)
+		cellText := truncateOrPad(cellContent, effectiveWidth)
 
 		var cell string
 		isSelectedCell := isSelectedRow && i == m.cursorCol
@@ -375,7 +395,15 @@ func (m Model) renderDataRow(rowIdx, startCol, endCol int) string {
 	}
 
 	separatorStyle := lipgloss.NewStyle().Foreground(t.Colors.BorderUnfocused)
-	return strings.Join(cells, separatorStyle.Render("│"))
+	line := strings.Join(cells, separatorStyle.Render("│"))
+
+	// Pad line to fill the available width
+	lineWidth := lipgloss.Width(line)
+	if lineWidth < m.width {
+		line = line + strings.Repeat(" ", m.width-lineWidth)
+	}
+
+	return line
 }
 
 // renderEmptyRow renders an empty row for padding
@@ -384,13 +412,21 @@ func (m Model) renderEmptyRow(startCol, endCol int) string {
 	var cells []string
 
 	for i := startCol; i < endCol; i++ {
-		col := m.columns[i]
-		cell := t.TableCell.Render(" " + strings.Repeat(" ", col.Width) + " ")
+		effectiveWidth := m.getEffectiveColumnWidth(i)
+		cell := t.TableCell.Render(" " + strings.Repeat(" ", effectiveWidth) + " ")
 		cells = append(cells, cell)
 	}
 
 	separatorStyle := lipgloss.NewStyle().Foreground(t.Colors.BorderUnfocused)
-	return strings.Join(cells, separatorStyle.Render("│"))
+	line := strings.Join(cells, separatorStyle.Render("│"))
+
+	// Pad line to fill the available width
+	lineWidth := lipgloss.Width(line)
+	if lineWidth < m.width {
+		line = line + strings.Repeat(" ", m.width-lineWidth)
+	}
+
+	return line
 }
 
 // renderStatusBar renders the status bar with navigation info
@@ -457,4 +493,54 @@ func intToStr(n int) string {
 		n /= 10
 	}
 	return string(digits)
+}
+
+// calculateColumnWidth calculates the optimal width for a column based on content
+// It considers both the header title and all cell values in that column
+func (m *Model) calculateColumnWidth(colIdx int) int {
+	if colIdx < 0 || colIdx >= len(m.columns) {
+		return 10 // Default minimum
+	}
+
+	// Start with the header title width
+	maxWidth := lipgloss.Width(m.columns[colIdx].Title)
+
+	// Check all rows for the maximum content width
+	for _, row := range m.rows {
+		if colIdx < len(row) {
+			cellWidth := lipgloss.Width(row[colIdx])
+			if cellWidth > maxWidth {
+				maxWidth = cellWidth
+			}
+		}
+	}
+
+	// Add some padding but cap at reasonable max
+	return min(max(maxWidth, 4), 50) // Min 4, max 50 characters
+}
+
+// SetAutoFit enables or disables auto-fit for all columns (set from config)
+func (m *Model) SetAutoFit(enabled bool) {
+	m.allColumnsAutoFit = enabled
+}
+
+// IsAutoFit returns whether auto-fit is enabled
+func (m Model) IsAutoFit() bool {
+	return m.allColumnsAutoFit
+}
+
+// getEffectiveColumnWidth returns the width to use for rendering a column
+func (m Model) getEffectiveColumnWidth(colIdx int) int {
+	if colIdx < 0 || colIdx >= len(m.columns) {
+		return 10
+	}
+
+	col := m.columns[colIdx]
+
+	// If auto-fit is enabled, calculate width based on content
+	if m.allColumnsAutoFit {
+		return m.calculateColumnWidth(colIdx)
+	}
+
+	return col.Width
 }

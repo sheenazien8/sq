@@ -8,13 +8,15 @@ import (
 
 // Config holds the application configuration
 type Config struct {
-	Theme string `json:"theme"`
+	Theme          string `json:"theme"`
+	AutoFitColumns bool   `json:"auto_fit_columns"`
 }
 
 // DefaultConfig returns the default configuration
 func DefaultConfig() *Config {
 	return &Config{
-		Theme: "default",
+		Theme:          "default",
+		AutoFitColumns: true, // Auto-fit columns to content by default
 	}
 }
 
