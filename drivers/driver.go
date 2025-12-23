@@ -4,13 +4,6 @@ const (
 	DriverMySQL string = "mysql"
 )
 
-// FilterCondition represents a single filter condition
-type FilterCondition struct {
-	Column   string
-	Operator string
-	Value    string
-}
-
 // Pagination represents pagination parameters
 type Pagination struct {
 	Page     int
@@ -32,11 +25,11 @@ type Driver interface {
 	GetTables(database string) (map[string][]string, error)
 	GetTableColumns(database, table string) ([][]string, error)
 	GetTableData(database, table string) ([][]string, error)
-	GetTableDataWithFilter(database, table string, filters []FilterCondition) ([][]string, error)
+	GetTableDataWithFilter(database, table string, whereClause string) ([][]string, error)
 
 	// Paginated data methods
 	GetTableDataPaginated(database, table string, pagination Pagination) (*PaginatedResult, error)
-	GetTableDataWithFilterPaginated(database, table string, filters []FilterCondition, pagination Pagination) (*PaginatedResult, error)
+	GetTableDataWithFilterPaginated(database, table string, whereClause string, pagination Pagination) (*PaginatedResult, error)
 
 	// Table structure methods
 	GetTableStructure(database, table string) (*TableStructure, error)

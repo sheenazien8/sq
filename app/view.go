@@ -76,14 +76,8 @@ func (m Model) View() string {
 
 	contentHeight := m.ContentHeight - 2
 
-	// Filter bar height depends on whether we're editing or just showing status
-	var filterBarHeight int
-	if m.Filter.Visible() {
-		filterBarHeight = 3 // Editing mode needs 3 lines
-	} else {
-		filterBarHeight = 3 // Status line with border needs 3 lines
-	}
-
+	// Filter bar is always 3 lines high
+	filterBarHeight := 3
 	tableHeight := contentHeight - filterBarHeight
 
 	var mainArea string
@@ -107,35 +101,8 @@ func (m Model) View() string {
 				Height(tableHeight).
 				Render(m.Tabs.View())
 
-			// Always show filter bar for table/structure tabs
-			var filterView string
-			if m.Filter.Visible() {
-				// Show filter input (3 lines)
-				filterView = m.Filter.View()
-			} else {
-				// Show filter status or empty filter bar (1 line with border)
-				activeTabFilters := m.Tabs.GetActiveTabFilters()
-
-				var message string
-				if len(activeTabFilters) > 0 {
-					// Show all active filters with AND
-					var filterStrings []string
-					for _, f := range activeTabFilters {
-						filterStrings = append(filterStrings, f.Column+" "+string(f.Operator)+" \""+f.Value+"\"")
-					}
-					message = "Filters (" + intToStr(len(activeTabFilters)) + "): " + joinStrings(filterStrings, " AND ") + " | C: clear | /: add"
-				} else {
-					message = "No filter | Press / to filter"
-				}
-
-				filterBarStyle := lipgloss.NewStyle().
-					Foreground(t.Colors.Foreground).
-					Border(lipgloss.RoundedBorder()).
-					BorderForeground(t.Colors.BorderUnfocused).
-					Width(m.ContentWidth-4).
-					Padding(0, 1)
-				filterView = filterBarStyle.Render(message)
-			}
+			// Always show filter input
+			filterView := m.Filter.View()
 
 			mainArea = lipgloss.JoinVertical(lipgloss.Left, filterView, contentView)
 		}

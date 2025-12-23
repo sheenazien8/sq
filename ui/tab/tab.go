@@ -15,14 +15,14 @@ import (
 
 // Tab represents a single tab containing content
 type Tab struct {
-	Name          string
-	Content       interface{} // Can be table.Model or query_editor.Model
-	Type          TabType
-	Active        bool
-	AllRows       []table.Row     // Original unfiltered data
-	Columns       []table.Column  // Column definitions
-	ColumnNames   []string        // Column names for filtering
-	ActiveFilters []filter.Filter // Multiple filters applied to this tab (all AND)
+	Name         string
+	Content      interface{} // Can be table.Model or query_editor.Model
+	Type         TabType
+	Active       bool
+	AllRows      []table.Row    // Original unfiltered data
+	Columns      []table.Column // Column definitions
+	ColumnNames  []string       // Column names for filtering
+	ActiveFilter *filter.Filter // Single active filter for this tab
 }
 
 // TabType represents the type of content in a tab
@@ -529,55 +529,42 @@ func (m Model) GetActiveTabData() ([]table.Row, []table.Column, []string) {
 
 // GetActiveTabFilter returns the active filter for the current tab
 func (m Model) GetActiveTabFilter() *filter.Filter {
-	if m.activeTab >= 0 && m.activeTab < len(m.tabs) {
-		filters := m.tabs[m.activeTab].ActiveFilters
-		if len(filters) > 0 {
-			return &filters[0]
-		}
-	}
-	return nil
+	return m.tabs[m.activeTab].ActiveFilter
 }
 
-// GetActiveTabFilters returns all active filters for the current tab
+// GetActiveTabFilters returns all active filters for the current tab (for compatibility, returns slice with single filter)
 func (m Model) GetActiveTabFilters() []filter.Filter {
-	if m.activeTab >= 0 && m.activeTab < len(m.tabs) {
-		return m.tabs[m.activeTab].ActiveFilters
+	if m.tabs[m.activeTab].ActiveFilter != nil {
+		return []filter.Filter{*m.tabs[m.activeTab].ActiveFilter}
 	}
 	return nil
 }
 
-// SetActiveTabFilter sets the filter for the current tab (replaces all filters)
+// SetActiveTabFilter sets the filter for the current tab
 func (m *Model) SetActiveTabFilter(f *filter.Filter) {
 	if m.activeTab >= 0 && m.activeTab < len(m.tabs) {
-		if f != nil {
-			m.tabs[m.activeTab].ActiveFilters = []filter.Filter{*f}
-		} else {
-			m.tabs[m.activeTab].ActiveFilters = nil
-		}
+		m.tabs[m.activeTab].ActiveFilter = f
 	}
 }
 
-// AddActiveTabFilter adds a new filter to the current tab
+// AddActiveTabFilter sets the filter for the current tab (replaces any existing filter)
 func (m *Model) AddActiveTabFilter(f filter.Filter) {
 	if m.activeTab >= 0 && m.activeTab < len(m.tabs) {
-		m.tabs[m.activeTab].ActiveFilters = append(m.tabs[m.activeTab].ActiveFilters, f)
+		m.tabs[m.activeTab].ActiveFilter = &f
 	}
 }
 
-// RemoveActiveTabFilter removes a filter at the given index
+// RemoveActiveTabFilter clears the active filter for the current tab
 func (m *Model) RemoveActiveTabFilter(index int) {
 	if m.activeTab >= 0 && m.activeTab < len(m.tabs) {
-		filters := m.tabs[m.activeTab].ActiveFilters
-		if index >= 0 && index < len(filters) {
-			m.tabs[m.activeTab].ActiveFilters = append(filters[:index], filters[index+1:]...)
-		}
+		m.tabs[m.activeTab].ActiveFilter = nil
 	}
 }
 
-// ClearActiveTabFilters clears all filters for the current tab
+// ClearActiveTabFilters clears the active filter for the current tab
 func (m *Model) ClearActiveTabFilters() {
 	if m.activeTab >= 0 && m.activeTab < len(m.tabs) {
-		m.tabs[m.activeTab].ActiveFilters = nil
+		m.tabs[m.activeTab].ActiveFilter = nil
 	}
 }
 

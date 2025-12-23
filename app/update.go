@@ -269,30 +269,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 		}
 
-		if m.Filter.Visible() {
-			prevActive := m.Filter.Active()
-			m.Filter, cmd = m.Filter.Update(msg)
-			cmds = append(cmds, cmd)
+		// Always handle filter input
+		prevFilter := m.Filter.GetFilter()
+		prevActive := m.Filter.Active()
+		m.Filter, cmd = m.Filter.Update(msg)
+		cmds = append(cmds, cmd)
 
-			// Check if filter was closed (applied or escaped)
-			if !m.Filter.Visible() {
-				f := m.Filter.GetFilter()
+		// Check if filter was applied (Enter pressed) by checking if filter changed
+		currentFilter := m.Filter.GetFilter()
+		if currentFilter != nil && (prevFilter == nil || prevFilter.WhereClause != currentFilter.WhereClause) {
+			m.Tabs.AddActiveTabFilter(*currentFilter)
+			m = m.applyFilterToActiveTab()
+		}
 
-				// If filter was applied (Enter pressed), add it to the tab
-				if f != nil && (m.Filter.Active() || m.Filter.Active() != prevActive) {
-					m.Tabs.AddActiveTabFilter(*f)
-					m = m.applyFilterToActiveTab()
-				}
-
-				// Adjust table size now that filter is hidden
-				m = m.updateTabSize()
-				// Return focus to tabs
-				m.Focus = FocusMain
-				m.Sidebar.SetFocused(false)
-				m.Tabs.SetFocused(true)
-				m = m.updateFooter()
-			}
-			return m, tea.Batch(cmds...)
+		// Check if filter was cleared (Ctrl+C pressed)
+		if prevActive && !m.Filter.Active() {
+			m.Tabs.ClearActiveTabFilters()
+			m = m.applyFilterToActiveTab()
 		}
 
 		if m.Sidebar.IsFilterVisible() {
@@ -412,10 +405,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case "]":
 				m.Tabs.NextTab()
+				m = m.updateFilterForActiveTab()
 				m = m.updateFooter()
 				return m, nil
 			case "[":
 				m.Tabs.PrevTab()
+				m = m.updateFilterForActiveTab()
 				m = m.updateFooter()
 				return m, nil
 			case "ctrl+w":
@@ -433,6 +428,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, cmd)
 				return m, tea.Batch(cmds...)
 			}
+		}
+
+		// If filter is focused, don't process global shortcuts
+		if m.Filter.Focused() {
+			return m, nil
 		}
 
 		switch msg.String() {
@@ -456,12 +456,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				_, _, columnNames := m.Tabs.GetActiveTabData()
 
 				if columnNames != nil {
-					// Update filter columns based on active tab
-					m.Filter = filter.New(columnNames)
-					m.Filter.SetWidth(m.ContentWidth)
-					m.Filter.SetVisible(true)
-					m.Focus = FocusFilter
-					m = m.updateTabSize()
+					// Create new filter with columns (if not already created or empty)
+					if !m.Filter.HasText() {
+						var filterText string
+						if activeFilter := m.Tabs.GetActiveTabFilter(); activeFilter != nil {
+							// Use the stored WHERE clause directly
+							filterText = activeFilter.WhereClause
+						}
+						m.Filter = filter.NewWithText(columnNames, filterText)
+						m.Filter.SetWidth(m.ContentWidth)
+					}
+					// Always focus the filter
+					m.Filter.Focus()
 					m = m.updateFooter()
 				}
 			} else if m.Focus == FocusSidebar {
@@ -854,18 +860,14 @@ func (m Model) applyFilterToActiveTab() Model {
 			"filter_count": len(filters),
 		})
 
-		// Convert filter.Filter to drivers.FilterCondition
-		driverFilters := make([]drivers.FilterCondition, len(filters))
-		for i, f := range filters {
-			driverFilters[i] = drivers.FilterCondition{
-				Column:   f.Column,
-				Operator: string(f.Operator),
-				Value:    f.Value,
-			}
+		// Get the raw WHERE clause from the filter
+		whereClause := ""
+		if len(filters) > 0 {
+			whereClause = filters[0].WhereClause
 		}
 
 		// Load data with filters and pagination
-		result, err = driver.GetTableDataWithFilterPaginated(dbName, tableName, driverFilters, pagination)
+		result, err = driver.GetTableDataWithFilterPaginated(dbName, tableName, whereClause, pagination)
 	}
 
 	if err != nil {
@@ -912,6 +914,29 @@ func (m Model) updateFooter() Model {
 	return m
 }
 
+// updateFilterForActiveTab updates the filter input to show the current tab's filter
+func (m Model) updateFilterForActiveTab() Model {
+	if !m.Tabs.HasTabs() {
+		m.Filter.SetText("")
+		m.Filter.Clear()
+		return m
+	}
+
+	// Get the active tab's filter
+	activeFilter := m.Tabs.GetActiveTabFilter()
+	if activeFilter != nil {
+		// Update filter input with current tab's filter
+		m.Filter.SetText(activeFilter.WhereClause)
+		m.Filter.SetActive(true)
+	} else {
+		// Clear filter input if no active filter
+		m.Filter.SetText("")
+		m.Filter.Clear()
+	}
+
+	return m
+}
+
 // updateTabSize adjusts tab size based on filter visibility
 func (m Model) updateTabSize() Model {
 	tableWidth := m.ContentWidth - 4
@@ -942,8 +967,7 @@ func (m Model) getFooterHelp() string {
 			return "?: Help | j/k/h/l: Navigate | </>: Page | /: Filter | []: Tabs | q: Quit"
 		}
 		return "?: Help | s: Toggle Sidebar | Tab: Switch | q: Quit"
-	case FocusFilter:
-		return "Tab/h/l: Switch Field | j/k: Options | Enter: Apply | Esc: Cancel"
+
 	case FocusSidebarFilter:
 		return "Enter: Apply | Esc: Cancel | Ctrl+C: Clear"
 	case FocusExitModal:
@@ -1169,16 +1193,12 @@ func (m Model) loadPage(page int) Model {
 	if len(filters) == 0 {
 		result, err = driver.GetTableDataPaginated(dbName, tableName, pagination)
 	} else {
-		// Convert filter.Filter to drivers.FilterCondition
-		driverFilters := make([]drivers.FilterCondition, len(filters))
-		for i, f := range filters {
-			driverFilters[i] = drivers.FilterCondition{
-				Column:   f.Column,
-				Operator: string(f.Operator),
-				Value:    f.Value,
-			}
+		// Get the raw WHERE clause from the filter
+		whereClause := ""
+		if len(filters) > 0 {
+			whereClause = filters[0].WhereClause
 		}
-		result, err = driver.GetTableDataWithFilterPaginated(dbName, tableName, driverFilters, pagination)
+		result, err = driver.GetTableDataWithFilterPaginated(dbName, tableName, whereClause, pagination)
 	}
 
 	if err != nil {

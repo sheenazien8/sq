@@ -140,64 +140,22 @@ func (db *MySQL) GetTableData(database, table string) ([][]string, error) {
 	return data, nil
 }
 
-func (db *MySQL) GetTableDataWithFilter(database, table string, filters []FilterCondition) ([][]string, error) {
+func (db *MySQL) GetTableDataWithFilter(database, table string, whereClause string) ([][]string, error) {
 	query := "SELECT * FROM " + database + "." + table
 
-	var whereClauses []string
-	var args []interface{}
-
-	// Build WHERE clause from filters
-	for _, f := range filters {
-		switch f.Operator {
-		case "=":
-			whereClauses = append(whereClauses, f.Column+" = ?")
-			args = append(args, f.Value)
-		case "!=":
-			whereClauses = append(whereClauses, f.Column+" != ?")
-			args = append(args, f.Value)
-		case "LIKE":
-			whereClauses = append(whereClauses, f.Column+" LIKE ?")
-			args = append(args, "%"+f.Value+"%")
-		case "NOT LIKE":
-			whereClauses = append(whereClauses, f.Column+" NOT LIKE ?")
-			args = append(args, "%"+f.Value+"%")
-		case ">":
-			whereClauses = append(whereClauses, f.Column+" > ?")
-			args = append(args, f.Value)
-		case "<":
-			whereClauses = append(whereClauses, f.Column+" < ?")
-			args = append(args, f.Value)
-		case ">=":
-			whereClauses = append(whereClauses, f.Column+" >= ?")
-			args = append(args, f.Value)
-		case "<=":
-			whereClauses = append(whereClauses, f.Column+" <= ?")
-			args = append(args, f.Value)
-		case "IS":
-			// IS operator typically used for NULL checks - don't use placeholder
-			whereClauses = append(whereClauses, f.Column+" IS "+f.Value)
-		case "IS NOT":
-			// IS NOT operator typically used for NULL checks - don't use placeholder
-			whereClauses = append(whereClauses, f.Column+" IS NOT "+f.Value)
-		}
-	}
-
-	if len(whereClauses) > 0 {
-		query += " WHERE " + whereClauses[0]
-		for i := 1; i < len(whereClauses); i++ {
-			query += " AND " + whereClauses[i]
-		}
+	// Use raw WHERE clause if provided
+	if whereClause != "" {
+		query += " WHERE " + whereClause
 	}
 
 	query += " LIMIT 1000"
 
-	// Log the SQL query with parameters
+	// Log the SQL query
 	logger.Debug("Executing filtered query", map[string]any{
-		"query":      query,
-		"parameters": args,
+		"query": query,
 	})
 
-	rows, err := db.Connection.Query(query, args...)
+	rows, err := db.Connection.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -323,80 +281,36 @@ func (db *MySQL) GetTableDataPaginated(database, table string, pagination Pagina
 }
 
 // GetTableDataWithFilterPaginated returns paginated and filtered table data
-func (db *MySQL) GetTableDataWithFilterPaginated(database, table string, filters []FilterCondition, pagination Pagination) (*PaginatedResult, error) {
+func (db *MySQL) GetTableDataWithFilterPaginated(database, table string, whereClause string, pagination Pagination) (*PaginatedResult, error) {
 	baseQuery := "SELECT * FROM " + database + "." + table
 	countQuery := "SELECT COUNT(*) FROM " + database + "." + table
 
-	var whereClauses []string
-	var args []interface{}
-
-	// Build WHERE clause from filters
-	for _, f := range filters {
-		switch f.Operator {
-		case "=":
-			whereClauses = append(whereClauses, f.Column+" = ?")
-			args = append(args, f.Value)
-		case "!=":
-			whereClauses = append(whereClauses, f.Column+" != ?")
-			args = append(args, f.Value)
-		case "LIKE":
-			whereClauses = append(whereClauses, f.Column+" LIKE ?")
-			args = append(args, "%"+f.Value+"%")
-		case "NOT LIKE":
-			whereClauses = append(whereClauses, f.Column+" NOT LIKE ?")
-			args = append(args, "%"+f.Value+"%")
-		case ">":
-			whereClauses = append(whereClauses, f.Column+" > ?")
-			args = append(args, f.Value)
-		case "<":
-			whereClauses = append(whereClauses, f.Column+" < ?")
-			args = append(args, f.Value)
-		case ">=":
-			whereClauses = append(whereClauses, f.Column+" >= ?")
-			args = append(args, f.Value)
-		case "<=":
-			whereClauses = append(whereClauses, f.Column+" <= ?")
-			args = append(args, f.Value)
-		case "IS":
-			whereClauses = append(whereClauses, f.Column+" IS "+f.Value)
-		case "IS NOT":
-			whereClauses = append(whereClauses, f.Column+" IS NOT "+f.Value)
-		}
-	}
-
-	whereClause := ""
-	if len(whereClauses) > 0 {
-		whereClause = " WHERE " + whereClauses[0]
-		for i := 1; i < len(whereClauses); i++ {
-			whereClause += " AND " + whereClauses[i]
-		}
+	// Use raw WHERE clause if provided
+	if whereClause != "" {
+		baseQuery += " WHERE " + whereClause
+		countQuery += " WHERE " + whereClause
 	}
 
 	// Get total count with filters
 	var totalRows int
-	countQuery += whereClause
-	if err := db.Connection.QueryRow(countQuery, args...).Scan(&totalRows); err != nil {
+	if err := db.Connection.QueryRow(countQuery).Scan(&totalRows); err != nil {
 		return nil, err
 	}
 
 	// Calculate offset
-	offset := (pagination.Page - 1) * pagination.PageSize
-	if offset < 0 {
-		offset = 0
-	}
+	offset := max((pagination.Page - 1) * pagination.PageSize, 0)
 
 	// Build final query with pagination
-	query := baseQuery + whereClause + " LIMIT " + strconv.Itoa(pagination.PageSize) + " OFFSET " + strconv.Itoa(offset)
+	query := baseQuery + " LIMIT " + strconv.Itoa(pagination.PageSize) + " OFFSET " + strconv.Itoa(offset)
 
 	logger.Debug("Executing filtered paginated query", map[string]any{
-		"query":      query,
-		"parameters": args,
-		"page":       pagination.Page,
-		"pageSize":   pagination.PageSize,
-		"offset":     offset,
+		"query":    query,
+		"page":     pagination.Page,
+		"pageSize": pagination.PageSize,
+		"offset":   offset,
 	})
 
-	rows, err := db.Connection.Query(query, args...)
+	rows, err := db.Connection.Query(query)
 	if err != nil {
 		return nil, err
 	}
@@ -508,7 +422,7 @@ func (db *MySQL) GetTableStructure(database, table string) (*TableStructure, err
 // GetColumnInfo returns detailed column information for a table
 func (db *MySQL) GetColumnInfo(database, table string) ([]ColumnInfo, error) {
 	query := `
-		SELECT 
+		SELECT
 			COLUMN_NAME,
 			COLUMN_TYPE,
 			IS_NULLABLE,
@@ -516,8 +430,8 @@ func (db *MySQL) GetColumnInfo(database, table string) ([]ColumnInfo, error) {
 			COLUMN_DEFAULT,
 			EXTRA,
 			COLUMN_COMMENT
-		FROM information_schema.COLUMNS 
-		WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? 
+		FROM information_schema.COLUMNS
+		WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
 		ORDER BY ORDINAL_POSITION`
 
 	rows, err := db.Connection.Query(query, database, table)
@@ -551,13 +465,13 @@ func (db *MySQL) GetColumnInfo(database, table string) ([]ColumnInfo, error) {
 // GetIndexInfo returns index information for a table
 func (db *MySQL) GetIndexInfo(database, table string) ([]IndexInfo, error) {
 	query := `
-		SELECT 
+		SELECT
 			INDEX_NAME,
 			GROUP_CONCAT(COLUMN_NAME ORDER BY SEQ_IN_INDEX) as COLUMNS,
 			NOT NON_UNIQUE as IS_UNIQUE,
 			INDEX_NAME = 'PRIMARY' as IS_PRIMARY,
 			INDEX_TYPE
-		FROM information_schema.STATISTICS 
+		FROM information_schema.STATISTICS
 		WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
 		GROUP BY INDEX_NAME, NON_UNIQUE, INDEX_TYPE
 		ORDER BY INDEX_NAME`
@@ -591,7 +505,7 @@ func (db *MySQL) GetIndexInfo(database, table string) ([]IndexInfo, error) {
 // GetRelationInfo returns foreign key relationships for a table
 func (db *MySQL) GetRelationInfo(database, table string) ([]RelationInfo, error) {
 	query := `
-		SELECT 
+		SELECT
 			CONSTRAINT_NAME,
 			COLUMN_NAME,
 			REFERENCED_TABLE_NAME,
@@ -642,7 +556,7 @@ func (db *MySQL) GetRelationInfo(database, table string) ([]RelationInfo, error)
 // GetTriggerInfo returns trigger information for a table
 func (db *MySQL) GetTriggerInfo(database, table string) ([]TriggerInfo, error) {
 	query := `
-		SELECT 
+		SELECT
 			TRIGGER_NAME,
 			EVENT_MANIPULATION,
 			ACTION_TIMING,

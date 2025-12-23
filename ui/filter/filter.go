@@ -2,7 +2,6 @@ package filter
 
 import (
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -11,62 +10,18 @@ import (
 	"github.com/sheenazien8/sq/ui/theme"
 )
 
-// Operator represents a filter operator
-type Operator string
-
-const (
-	OpEquals      Operator = "="
-	OpNotEquals   Operator = "!="
-	OpContains    Operator = "LIKE"
-	OpNotContains Operator = "NOT LIKE"
-	OpGreater     Operator = ">"
-	OpLess        Operator = "<"
-	OpGreaterEq   Operator = ">="
-	OpLessEq      Operator = "<="
-	OpIs          Operator = "IS"
-	OpIsNot       Operator = "IS NOT"
-)
-
-var operators = []Operator{
-	OpEquals,
-	OpNotEquals,
-	OpContains,
-	OpNotContains,
-	OpGreater,
-	OpLess,
-	OpGreaterEq,
-	OpLessEq,
-	OpIs,
-	OpIsNot,
-}
-
-// Filter represents a single filter condition
+// Filter represents a filter with raw WHERE clause
 type Filter struct {
-	Column   string
-	Operator Operator
-	Value    string
+	WhereClause string // Raw WHERE clause text (e.g., "name = 'John'")
 }
-
-// FocusField represents which field is currently focused
-type FocusField int
-
-const (
-	FocusColumn FocusField = iota
-	FocusOperator
-	FocusValue
-)
 
 // Model represents the filter input component
 type Model struct {
-	columns       []string // Available column names
-	columnIndex   int      // Selected column index
-	operatorIndex int      // Selected operator index
-	valueInput    textinput.Model
+	columns     []string // Available column names
+	filterInput textinput.Model
 
-	focusField FocusField
-	width      int
-	visible    bool
-	active     bool // Whether filter is actively filtering
+	width  int
+	active bool // Whether filter is actively filtering
 
 	// Current filter
 	currentFilter *Filter
@@ -74,10 +29,17 @@ type Model struct {
 
 // New creates a new filter model
 func New(columns []string) Model {
+	return NewWithText(columns, "")
+}
+
+// NewWithText creates a new filter model with initial text
+func NewWithText(columns []string, initialText string) Model {
 	ti := textinput.New()
-	ti.Placeholder = "enter value"
-	ti.CharLimit = 100
-	ti.Width = 30
+	ti.Placeholder = "column = value or column value"
+	ti.CharLimit = 200
+	ti.Width = 50
+	ti.SetValue(initialText)
+	ti.Blur() // Start blurred
 
 	// Sort columns alphabetically
 	sortedColumns := make([]string, len(columns))
@@ -85,13 +47,9 @@ func New(columns []string) Model {
 	sort.Strings(sortedColumns)
 
 	return Model{
-		columns:       sortedColumns,
-		columnIndex:   0,
-		operatorIndex: 0,
-		valueInput:    ti,
-		focusField:    FocusColumn,
-		visible:       false,
-		active:        false,
+		columns:     sortedColumns,
+		filterInput: ti,
+		active:      false,
 	}
 }
 
@@ -103,44 +61,46 @@ func (m *Model) SetColumns(columns []string) {
 	sort.Strings(sortedColumns)
 
 	m.columns = sortedColumns
-	if m.columnIndex >= len(columns) {
-		m.columnIndex = 0
-	}
 }
 
 // SetWidth sets the component width
 func (m *Model) SetWidth(width int) {
 	m.width = width
 	if width > 60 {
-		m.valueInput.Width = 30
+		m.filterInput.Width = 50
 	} else {
-		m.valueInput.Width = 15
+		m.filterInput.Width = 30
 	}
 }
 
-// SetVisible shows/hides the filter
-func (m *Model) SetVisible(visible bool) {
-	m.visible = visible
-	if visible {
-		m.focusField = FocusColumn
-		// Clear previous value and blur
-		m.valueInput.SetValue("")
-		m.valueInput.Blur()
-	}
+// Focus focuses the filter input
+func (m *Model) Focus() {
+	m.filterInput.Focus()
 }
 
-// Visible returns whether the filter is visible
-func (m Model) Visible() bool {
-	return m.visible
+// Blur blurs the filter input
+func (m *Model) Blur() {
+	m.filterInput.Blur()
 }
 
-// Toggle toggles visibility
-func (m *Model) Toggle() {
-	m.visible = !m.visible
-	if m.visible {
-		m.focusField = FocusColumn
-		m.valueInput.Blur()
-	}
+// HasText returns true if the filter input has text
+func (m Model) HasText() bool {
+	return m.filterInput.Value() != ""
+}
+
+// Focused returns true if the filter input is focused
+func (m Model) Focused() bool {
+	return m.filterInput.Focused()
+}
+
+// GetColumns returns the available columns
+func (m Model) GetColumns() []string {
+	return m.columns
+}
+
+// SetText sets the filter input text
+func (m *Model) SetText(text string) {
+	m.filterInput.SetValue(text)
 }
 
 // Active returns whether a filter is active
@@ -158,129 +118,57 @@ func (m Model) GetFilter() *Filter {
 
 // Clear clears the current filter
 func (m *Model) Clear() {
-	m.valueInput.SetValue("")
+	m.filterInput.SetValue("")
 	m.currentFilter = nil
 	m.active = false
-	m.columnIndex = 0
-	m.operatorIndex = 0
 }
 
 // Apply applies the current filter settings
 func (m *Model) Apply() {
-	if len(m.columns) == 0 {
-		return
-	}
-
-	value := strings.TrimSpace(m.valueInput.Value())
-	if value == "" {
+	input := strings.TrimSpace(m.filterInput.Value())
+	if input == "" {
 		m.active = false
 		m.currentFilter = nil
 		return
 	}
 
+	// Store the raw WHERE clause directly - user is responsible for proper SQL syntax
 	m.currentFilter = &Filter{
-		Column:   m.columns[m.columnIndex],
-		Operator: operators[m.operatorIndex],
-		Value:    value,
+		WhereClause: input,
 	}
 	m.active = true
 }
 
 // Update handles input
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
-	if !m.visible {
-		return m, nil
-	}
-
 	var cmd tea.Cmd
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		key := msg.String()
 
-		// Handle escape first
-		if key == "esc" {
-			m.visible = false
-			m.valueInput.Blur()
+		// Handle enter to apply and blur
+		if key == "enter" {
+			m.Apply()
+			m.filterInput.Blur()
 			return m, nil
 		}
 
-		// Handle enter to apply
-		if key == "enter" {
-			m.Apply()
-			m.visible = false
-			m.valueInput.Blur()
+		// Handle escape to blur without applying
+		if key == "esc" {
+			m.filterInput.Blur()
 			return m, nil
 		}
 
 		// Handle clear
 		if key == "ctrl+c" {
 			m.Clear()
-			m.valueInput.Blur()
 			return m, nil
 		}
 
-		// If on value field, handle text input
-		if m.focusField == FocusValue {
-			// Tab moves to next field
-			if key == "tab" {
-				m.focusField = FocusColumn
-				m.valueInput.Blur()
-				return m, nil
-			}
-			if key == "shift+tab" {
-				m.focusField = FocusOperator
-				m.valueInput.Blur()
-				return m, nil
-			}
-			// Pass other keys to text input
-			m.valueInput, cmd = m.valueInput.Update(msg)
-			return m, cmd
-		}
-
-		// Navigation for fields
-		switch key {
-		case "tab", "l", "right":
-			m.focusField = (m.focusField + 1) % 3
-			if m.focusField == FocusValue {
-				cmd = m.valueInput.Focus()
-				return m, cmd
-			} else {
-				m.valueInput.Blur()
-			}
-		case "shift+tab", "h", "left":
-			if m.focusField == 0 {
-				m.focusField = 2
-			} else {
-				m.focusField--
-			}
-			if m.focusField == FocusValue {
-				cmd = m.valueInput.Focus()
-				return m, cmd
-			} else {
-				m.valueInput.Blur()
-			}
-		case "up", "k":
-			if m.focusField == FocusColumn && len(m.columns) > 0 {
-				if m.columnIndex > 0 {
-					m.columnIndex--
-				} else {
-					m.columnIndex = len(m.columns) - 1
-				}
-			} else if m.focusField == FocusOperator {
-				if m.operatorIndex > 0 {
-					m.operatorIndex--
-				} else {
-					m.operatorIndex = len(operators) - 1
-				}
-			}
-		case "down", "j":
-			if m.focusField == FocusColumn && len(m.columns) > 0 {
-				m.columnIndex = (m.columnIndex + 1) % len(m.columns)
-			} else if m.focusField == FocusOperator {
-				m.operatorIndex = (m.operatorIndex + 1) % len(operators)
-			}
-		}
+		// Pass other keys to text input
+		m.filterInput, cmd = m.filterInput.Update(msg)
+		return m, cmd
 	}
 
 	return m, cmd
@@ -288,62 +176,25 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 // View renders the filter component
 func (m Model) View() string {
-	if !m.visible {
-		return ""
-	}
-
 	t := theme.Current
-
-	focusedStyle := lipgloss.NewStyle().
-		Foreground(t.Colors.Foreground).
-		Background(t.Colors.Primary).
-		Padding(0, 1)
-
-	unfocusedStyle := lipgloss.NewStyle().
-		Foreground(t.Colors.ForegroundDim).
-		Padding(0, 1)
 
 	labelStyle := lipgloss.NewStyle().
 		Foreground(t.Colors.ForegroundDim)
 
-	var columnValue string
-	if len(m.columns) > 0 {
-		columnValue = m.columns[m.columnIndex]
-	} else {
-		columnValue = "(none)"
-	}
-	columnLabel := labelStyle.Render("Column: ")
-	var columnField string
-	if m.focusField == FocusColumn {
-		columnField = focusedStyle.Render("< " + columnValue + " >")
-	} else {
-		columnField = unfocusedStyle.Render("  " + columnValue + "  ")
-	}
+	inputStyle := lipgloss.NewStyle().
+		Foreground(t.Colors.Foreground).
+		Background(t.Colors.SelectionBg).
+		Padding(0, 1)
 
-	opValue := string(operators[m.operatorIndex])
-	opLabel := labelStyle.Render("  Op: ")
-	var opField string
-	if m.focusField == FocusOperator {
-		opField = focusedStyle.Render("< " + padOperator(opValue) + " >")
-	} else {
-		opField = unfocusedStyle.Render("  " + padOperator(opValue) + "  ")
-	}
+	// Title and WHERE label
+	titleStyle := lipgloss.NewStyle().
+		Foreground(t.Colors.Primary).
+		Bold(true)
+	title := titleStyle.Render("Filter:")
+	whereLabel := labelStyle.Render(" WHERE ")
 
-	valueLabel := labelStyle.Render("  Value: ")
-	var valueField string
-	if m.focusField == FocusValue {
-		inputStyle := lipgloss.NewStyle().
-			Foreground(t.Colors.Foreground).
-			Background(t.Colors.SelectionBg).
-			Padding(0, 1)
-		valueField = inputStyle.Render(m.valueInput.View())
-	} else {
-		val := m.valueInput.Value()
-		if val == "" {
-			val = "..."
-		}
-		valueField = unfocusedStyle.Render("[" + val + "]")
-	}
+	// Input field
+	inputField := inputStyle.Render(m.filterInput.View())
 
 	// Status
 	var status string
@@ -353,26 +204,20 @@ func (m Model) View() string {
 			Render(" [ACTIVE]")
 	}
 
-	// Help text
-	helpStyle := lipgloss.NewStyle().
-		Foreground(t.Colors.ForegroundDim)
-	help := helpStyle.Render()
+	// Combine all parts
+	line := title + whereLabel + inputField + status
 
-	// Title
-	titleStyle := lipgloss.NewStyle().
-		Foreground(t.Colors.Primary).
-		Bold(true)
-	title := titleStyle.Render("Filter:")
-
-	// Combine all parts in a single line
-	line := title + " " + columnLabel + columnField + opLabel + opField + valueLabel + valueField + status + help
-
-	// Container
+	// Container - use different border style based on focus state
 	containerStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(t.Colors.Primary).
 		Width(m.width-4).
 		Padding(0, 1)
+
+	if m.filterInput.Focused() {
+		containerStyle = containerStyle.BorderForeground(t.Colors.BorderFocused)
+	} else {
+		containerStyle = containerStyle.BorderForeground(t.Colors.BorderUnfocused)
+	}
 
 	return containerStyle.Render(line)
 }
@@ -385,108 +230,7 @@ func padOperator(op string) string {
 	return op
 }
 
-// Match checks if a row matches the filter
-func (f *Filter) Match(row []string, columns []string) bool {
-	if f == nil {
-		return true
-	}
-
-	// Find column index
-	colIdx := -1
-	for i, col := range columns {
-		if col == f.Column {
-			colIdx = i
-			break
-		}
-	}
-
-	if colIdx < 0 || colIdx >= len(row) {
-		return true // Column not found, don't filter
-	}
-
-	cellValue := strings.ToLower(row[colIdx])
-	filterValue := strings.ToLower(f.Value)
-
-	switch f.Operator {
-	case OpEquals:
-		return cellValue == filterValue
-	case OpNotEquals:
-		return cellValue != filterValue
-	case OpContains:
-		return strings.Contains(cellValue, filterValue)
-	case OpNotContains:
-		return !strings.Contains(cellValue, filterValue)
-	case OpIs:
-		// For IS operator, typically used for NULL checks
-		if strings.ToUpper(f.Value) == "NULL" {
-			return cellValue == "null" || cellValue == ""
-		}
-		return cellValue == filterValue
-	case OpIsNot:
-		// For IS NOT operator, typically used for NULL checks
-		if strings.ToUpper(f.Value) == "NULL" {
-			return cellValue != "null" && cellValue != ""
-		}
-		return cellValue != filterValue
-	case OpGreater, OpLess, OpGreaterEq, OpLessEq:
-		// Try numeric comparison
-		cellNum, err1 := parseNumber(cellValue)
-		filterNum, err2 := parseNumber(filterValue)
-		if err1 != nil || err2 != nil {
-			// Fall back to string comparison
-			return compareStrings(cellValue, filterValue, f.Operator)
-		}
-		return compareNumbers(cellNum, filterNum, f.Operator)
-	}
-
-	return true
-}
-
-func parseNumber(s string) (float64, error) {
-	// Remove commas from numbers like "37,274,000"
-	s = strings.ReplaceAll(s, ",", "")
-	return strconv.ParseFloat(s, 64)
-}
-
-func compareNumbers(a, b float64, op Operator) bool {
-	switch op {
-	case OpGreater:
-		return a > b
-	case OpLess:
-		return a < b
-	case OpGreaterEq:
-		return a >= b
-	case OpLessEq:
-		return a <= b
-	}
-	return false
-}
-
-func compareStrings(a, b string, op Operator) bool {
-	switch op {
-	case OpGreater:
-		return a > b
-	case OpLess:
-		return a < b
-	case OpGreaterEq:
-		return a >= b
-	case OpLessEq:
-		return a <= b
-	}
-	return false
-}
-
-// FilterRows filters rows based on the filter
-func FilterRows(rows [][]string, columns []string, f *Filter) [][]string {
-	if f == nil {
-		return rows
-	}
-
-	var filtered [][]string
-	for _, row := range rows {
-		if f.Match(row, columns) {
-			filtered = append(filtered, row)
-		}
-	}
-	return filtered
+// SetActive sets the filter active state
+func (m *Model) SetActive(active bool) {
+	m.active = active
 }
