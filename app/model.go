@@ -7,6 +7,7 @@ import (
 	modalcellpreview "github.com/sheenazien8/sq/ui/modal-cell-preview"
 	modalcreateconnection "github.com/sheenazien8/sq/ui/modal-create-connection"
 	modalexit "github.com/sheenazien8/sq/ui/modal-exit"
+	modalhelp "github.com/sheenazien8/sq/ui/modal-help"
 	"github.com/sheenazien8/sq/ui/sidebar"
 	"github.com/sheenazien8/sq/ui/tab"
 	"github.com/sheenazien8/sq/ui/table"
@@ -28,6 +29,7 @@ const (
 	FocusExitModal
 	FocusCreateConnectionModal
 	FocusCellPreviewModal
+	FocusHelpModal
 )
 
 type Model struct {
@@ -38,6 +40,7 @@ type Model struct {
 	ExitModal             modalexit.Model
 	CreateConnectionModal modalcreateconnection.Model
 	CellPreviewModal      modalcellpreview.Model
+	HelpModal             modalhelp.Model
 	Focus                 Focus
 
 	allRows     []table.Row
@@ -101,6 +104,7 @@ func New() Model {
 	exitModal := modalexit.New()
 	createConnectionModal := modalcreateconnection.New()
 	cellPreviewModal := modalcellpreview.New()
+	helpModal := modalhelp.New()
 	tabs := tab.New()
 
 	return Model{
@@ -109,6 +113,7 @@ func New() Model {
 		ExitModal:             exitModal,
 		CreateConnectionModal: createConnectionModal,
 		CellPreviewModal:      cellPreviewModal,
+		HelpModal:             helpModal,
 		Focus:                 FocusSidebar,
 		dbConnections:         make(map[string]drivers.Driver),
 		themeIndex:            themeIdx,

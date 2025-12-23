@@ -401,15 +401,11 @@ func (m Model) renderStatusBar() string {
 
 	// Build right info with pagination
 	var rightParts []string
-	rightParts = append(rightParts, "Cols "+intToStr(m.colOffset+1)+"-"+intToStr(min(m.colOffset+m.visibleCols(), len(m.columns)))+"/"+intToStr(len(m.columns)))
 
 	// Add pagination info if there are multiple pages
 	if m.totalPages > 1 {
 		rightParts = append(rightParts, "Page "+intToStr(m.currentPage)+"/"+intToStr(m.totalPages)+" ("+intToStr(m.totalRows)+" total)")
-		rightParts = append(rightParts, "</>:page")
 	}
-
-	rightParts = append(rightParts, "h/l:cell")
 
 	rightInfo := t.StatusBar.Render(strings.Join(rightParts, " | "))
 

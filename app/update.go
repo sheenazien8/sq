@@ -249,6 +249,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ExitModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 		m.CreateConnectionModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 		m.CellPreviewModal.SetSize(m.TerminalWidth, m.TerminalHeight)
+		m.HelpModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 
 	case tea.KeyMsg:
 		if m.ExitModal.Visible() {
@@ -370,6 +371,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 		}
 
+		if m.HelpModal.Visible() {
+			m.HelpModal, cmd = m.HelpModal.Update(msg)
+			cmds = append(cmds, cmd)
+
+			// Check if modal was closed
+			if !m.HelpModal.Visible() {
+				// Return to previous focus
+				if m.Tabs.HasTabs() {
+					m.Focus = FocusMain
+					m.Sidebar.SetFocused(false)
+					m.Tabs.SetFocused(true)
+				} else {
+					m.Focus = FocusSidebar
+					m.Sidebar.SetFocused(true)
+				}
+				m = m.updateFooter()
+			}
+			return m, tea.Batch(cmds...)
+		}
+
 		// If query editor is active, pass most keys directly to it
 		// Only intercept specific control keys for app-level navigation
 		if m.Focus == FocusMain && m.Tabs.HasTabs() && m.Tabs.GetActiveTabType() == tab.TabTypeQuery {
@@ -415,6 +436,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		switch msg.String() {
+		case "?":
+			// Show help modal
+			m.HelpModal.Show()
+			m.Focus = FocusHelpModal
+			m = m.updateFooter()
+			return m, nil
+
 		case "ctrl+c", "q":
 			if m.Focus == FocusSidebar || m.Focus == FocusMain {
 				m.ExitModal.Show()
@@ -901,35 +929,31 @@ func (m Model) updateTabSize() Model {
 func (m Model) getFooterHelp() string {
 	switch m.Focus {
 	case FocusSidebar:
-		return "j/k: Navigate | Enter: Select/Connect | e: Query Editor | d: Structure | n: New Connection | /: Filter | C: Clear Filter | R: Refresh | s: Toggle Sidebar | Tab: Switch | T: Theme | q: Quit"
+		return "?: Help | j/k: Navigate | Enter: Select | e: Query | n: New | /: Filter | Tab: Switch | q: Quit"
 	case FocusMain:
 		if m.Tabs.HasTabs() {
 			tabType := m.Tabs.GetActiveTabType()
 			if tabType == tab.TabTypeStructure {
-				return "j/k/h/l: Navigate | 1-4: Sections | Tab: Next Section | []: Switch Tab | Ctrl+W: Close | s: Toggle Sidebar | q: Quit"
+				return "?: Help | j/k/h/l: Navigate | 1-4: Sections | []: Tabs | Ctrl+W: Close | q: Quit"
 			}
 			if tabType == tab.TabTypeQuery {
-				return "F5/Ctrl+E: Execute | Ctrl+R: Toggle Focus | []: Switch Tab | Ctrl+W: Close | Tab: Sidebar | q: Quit"
+				return "?: Help | F5: Execute | Ctrl+R: Results | []: Tabs | Ctrl+W: Close | q: Quit"
 			}
-			if !m.sidebarCollapsed {
-				return "j/k/h/l: Navigate | </>: Page | e: Query | y: Yank | p: Preview | /: Filter | C: Clear | []: Tabs | q: Quit"
-			}
-			return "j/k/h/l: Navigate | </>: Page | e: Query | y: Yank | p: Preview | /: Filter | C: Clear | []: Tabs | q: Quit"
+			return "?: Help | j/k/h/l: Navigate | </>: Page | /: Filter | []: Tabs | q: Quit"
 		}
-		if !m.sidebarCollapsed {
-			return "s: Toggle Sidebar | Tab: Switch | T: Theme | q: Quit"
-		}
-		return "s: Toggle Sidebar | T: Theme | q: Quit"
+		return "?: Help | s: Toggle Sidebar | Tab: Switch | q: Quit"
 	case FocusFilter:
-		return "Tab/h/l: Switch Field | j/k: Navigate Options | Enter: Apply | Esc: Cancel | Ctrl+C: Clear"
+		return "Tab/h/l: Switch Field | j/k: Options | Enter: Apply | Esc: Cancel"
 	case FocusSidebarFilter:
 		return "Enter: Apply | Esc: Cancel | Ctrl+C: Clear"
 	case FocusExitModal:
-		return "y: Yes | n/Esc: No | h/l: Switch Button"
+		return "y: Yes | n/Esc: No | h/l: Switch"
 	case FocusCreateConnectionModal:
-		return "Tab: Next Field | Shift+Tab: Previous Field | Enter: Submit | Esc: Cancel"
+		return "Tab: Next Field | Enter: Submit | Esc: Cancel"
+	case FocusHelpModal:
+		return "←→/Tab: Sections | j/k: Scroll | Esc/q: Close"
 	default:
-		return "Tab: Switch | T: Theme | q: Quit"
+		return "?: Help | q: Quit"
 	}
 }
 

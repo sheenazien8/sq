@@ -52,6 +52,10 @@ func (m Model) View() string {
 		return m.CellPreviewModal.View()
 	}
 
+	if m.HelpModal.Visible() {
+		return m.HelpModal.View()
+	}
+
 	t := theme.Current
 
 	var sidebarView string
