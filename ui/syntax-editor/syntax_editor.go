@@ -10,6 +10,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/sheenazien8/sq/ui/theme"
+	"slices"
 )
 
 // HighlightedText represents a piece of text with syntax highlighting
@@ -41,6 +42,9 @@ type Model struct {
 	placeholder  string        // Placeholder text
 	showBorder   bool          // Whether to show border around editor
 	cursorStyle  CursorStyle   // Block or line cursor
+	inVisualMode bool          // Whether in visual mode
+	visualStartX int           // Visual selection start X
+	visualStartY int           // Visual selection start Y
 }
 
 // New creates a new syntax-highlighting text editor
@@ -71,6 +75,9 @@ func New() Model {
 		placeholder:  "",
 		showBorder:   true,
 		cursorStyle:  CursorBlock,
+		inVisualMode: false,
+		visualStartX: 0,
+		visualStartY: 0,
 	}
 }
 
@@ -215,82 +222,66 @@ func (m Model) isEmpty() bool {
 }
 
 // renderLine renders a single line with syntax highlighting
-func (m Model) renderLine(line string, isCursorLine bool, cursorX int) string {
-
+func (m Model) renderLine(line string, lineY int, isCursorLine bool, cursorX int) string {
+	if line == "" {
+		line = " "
+	}
+	runes := []rune(line)
 	segments := m.highlightText(line)
+
+	// Build a map of position -> style for quick lookup
+	positionStyles := make(map[int]lipgloss.Style)
+	segPos := 0
+	for _, segment := range segments {
+		segRunes := []rune(segment.Text)
+		for i := 0; i < len(segRunes); i++ {
+			positionStyles[segPos+i] = segment.Style
+		}
+		segPos += len(segRunes)
+	}
+
 	var renderedParts []string
 
-	currentPos := 0
-	for _, segment := range segments {
-		segmentStart := currentPos
-		segmentEnd := currentPos + utf8.RuneCountInString(segment.Text)
+	for pos, r := range runes {
+		// Get style for this position
+		style, found := positionStyles[pos]
+		if !found {
+			style = lipgloss.NewStyle()
+		}
 
-		// Check if cursor is in this segment
-		if isCursorLine && cursorX >= segmentStart && cursorX < segmentEnd {
-			// Split the segment at cursor position
-			beforeCursor := ""
-			afterCursor := segment.Text
+		// Apply selection style if selected
+		if m.isPositionSelected(lineY, pos) {
+			t := theme.Current
+			style = style.Background(t.Colors.SelectionBg).Foreground(t.Colors.Foreground)
+		}
 
-			if cursorX > segmentStart {
-				runes := []rune(segment.Text)
-				cursorOffset := cursorX - segmentStart
-				if cursorOffset < len(runes) {
-					beforeCursor = string(runes[:cursorOffset])
-					afterCursor = string(runes[cursorOffset:])
-				} else {
-					beforeCursor = segment.Text
-					afterCursor = ""
-				}
-			}
-
-			if beforeCursor != "" {
-				renderedParts = append(renderedParts, segment.Style.Render(beforeCursor))
-			}
-
-			// Render cursor based on style
+		// Handle cursor
+		if isCursorLine && pos == cursorX {
 			if m.focused && m.cursorStyle == CursorBlock {
-				// Block cursor - underline the character under cursor (vim normal mode)
 				t := theme.Current
-				cursorStyle := segment.Style.Copy().
+				cursorStyle := style.Copy().
 					Underline(true).
 					Background(t.Colors.Primary).
 					Foreground(t.Colors.Background)
-				if afterCursor != "" {
-					runes := []rune(afterCursor)
-					renderedParts = append(renderedParts, cursorStyle.Render(string(runes[0])))
-					if len(runes) > 1 {
-						renderedParts = append(renderedParts, segment.Style.Render(string(runes[1:])))
-					}
-				} else {
-					// Cursor at end of line - render a space with cursor styling
-					renderedParts = append(renderedParts, cursorStyle.Render(" "))
-				}
+				renderedParts = append(renderedParts, cursorStyle.Render(string(r)))
 			} else if m.focused && m.cursorStyle == CursorLine {
-				// Line cursor - render a pipe character before the text (vim insert mode)
 				t := theme.Current
 				cursorChar := lipgloss.NewStyle().
 					Foreground(t.Colors.Primary).
 					Bold(true).
 					Render("|")
 				renderedParts = append(renderedParts, cursorChar)
-				if afterCursor != "" {
-					renderedParts = append(renderedParts, segment.Style.Render(afterCursor))
-				}
+				renderedParts = append(renderedParts, style.Render(string(r)))
 			} else {
-				// Not focused - just render the text normally
-				if afterCursor != "" {
-					renderedParts = append(renderedParts, segment.Style.Render(afterCursor))
-				}
+				renderedParts = append(renderedParts, style.Render(string(r)))
 			}
 		} else {
-			renderedParts = append(renderedParts, segment.Style.Render(segment.Text))
+			renderedParts = append(renderedParts, style.Render(string(r)))
 		}
-
-		currentPos = segmentEnd
 	}
 
-	// If cursor is beyond the end of the line, add cursor indicator
-	if isCursorLine && cursorX >= currentPos && m.focused {
+	// If cursor at end of line
+	if isCursorLine && cursorX >= len(runes) && m.focused {
 		t := theme.Current
 		if m.cursorStyle == CursorBlock {
 			cursorStyle := lipgloss.NewStyle().
@@ -339,10 +330,7 @@ func (m Model) View() string {
 
 	// Calculate visible line range
 	startLine := m.scrollOffset
-	endLine := startLine + m.height
-	if endLine > len(m.content) {
-		endLine = len(m.content)
-	}
+	endLine := min(startLine+m.height, len(m.content))
 
 	// Ensure we don't go out of bounds
 	if startLine < 0 {
@@ -356,7 +344,7 @@ func (m Model) View() string {
 	for i := startLine; i < endLine && i < len(m.content); i++ {
 		line := m.content[i]
 		isCursorLine := (i == m.cursorY)
-		renderedLine := m.renderLine(line, isCursorLine, m.cursorX)
+		renderedLine := m.renderLine(line, i, isCursorLine, m.cursorX)
 
 		// Pad line to editor width
 		if lipgloss.Width(renderedLine) < m.width {
@@ -386,6 +374,32 @@ func (m Model) View() string {
 	}
 
 	return content
+}
+
+// isPositionSelected checks if a position is within the visual selection
+func (m Model) isPositionSelected(y, x int) bool {
+	if !m.inVisualMode {
+		return false
+	}
+	startY, startX := m.visualStartY, m.visualStartX
+	endY, endX := m.cursorY, m.cursorX
+
+	// Normalize start < end
+	if startY > endY || (startY == endY && startX > endX) {
+		startY, endY = endY, startY
+		startX, endX = endX, startX
+	}
+
+	if y < startY || y > endY {
+		return false
+	}
+	if y == startY && x < startX {
+		return false
+	}
+	if y == endY && x >= endX {
+		return false
+	}
+	return true
 }
 
 // adjustScroll adjusts the scroll offset to keep cursor visible
@@ -462,18 +476,45 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				}
 			}
 		case keyStr == "enter" || keyType == tea.KeyEnter:
-			// Split line at cursor
+			// Split line at cursor with auto-indentation
 			currentLine := m.content[m.cursorY]
 			before := currentLine[:m.cursorX]
 			after := currentLine[m.cursorX:]
 
-			// Insert new line
+			// Calculate indentation from current line
+			indent := ""
+			for _, ch := range currentLine {
+				if ch == ' ' || ch == '\t' {
+					indent += string(ch)
+				} else {
+					break
+				}
+			}
+
+			// Check if we should add extra indentation (after certain SQL keywords)
+			trimmedBefore := strings.TrimSpace(strings.ToUpper(before))
+			extraIndent := ""
+			if strings.HasSuffix(trimmedBefore, "SELECT") ||
+				strings.HasSuffix(trimmedBefore, "FROM") ||
+				strings.HasSuffix(trimmedBefore, "WHERE") ||
+				strings.HasSuffix(trimmedBefore, "AND") ||
+				strings.HasSuffix(trimmedBefore, "OR") ||
+				strings.HasSuffix(trimmedBefore, "JOIN") ||
+				strings.HasSuffix(trimmedBefore, "ON") ||
+				strings.HasSuffix(trimmedBefore, "SET") ||
+				strings.HasSuffix(trimmedBefore, "VALUES") ||
+				strings.HasSuffix(trimmedBefore, "(") ||
+				strings.HasSuffix(trimmedBefore, ",") {
+				extraIndent = "  "
+			}
+
+			// Insert new line with indentation
 			m.content = append(m.content[:m.cursorY+1], m.content[m.cursorY:]...)
 			m.content[m.cursorY] = before
-			m.content[m.cursorY+1] = after
+			m.content[m.cursorY+1] = indent + extraIndent + strings.TrimLeft(after, " \t")
 
 			m.cursorY++
-			m.cursorX = 0
+			m.cursorX = len(indent) + len(extraIndent)
 		case keyStr == "backspace" || keyType == tea.KeyBackspace:
 			if m.cursorX > 0 {
 				// Delete character before cursor
@@ -485,7 +526,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				currentLine := m.content[m.cursorY]
 				m.cursorX = len(m.content[m.cursorY-1])
 				m.content[m.cursorY-1] += currentLine
-				m.content = append(m.content[:m.cursorY], m.content[m.cursorY+1:]...)
+				m.content = slices.Delete(m.content, m.cursorY, m.cursorY+1)
 				m.cursorY--
 			}
 		case keyStr == "delete" || keyType == tea.KeyDelete:
@@ -497,7 +538,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				// Join with next line
 				nextLine := m.content[m.cursorY+1]
 				m.content[m.cursorY] += nextLine
-				m.content = append(m.content[:m.cursorY+1], m.content[m.cursorY+2:]...)
+				m.content = slices.Delete(m.content, m.cursorY+1, m.cursorY+2)
 			}
 		case keyStr == "home" || keyType == tea.KeyHome:
 			m.cursorX = 0
@@ -524,13 +565,12 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		case keyType == tea.KeyCtrlZ:
 			// Undo - not implemented for now
 		default:
-			// Insert character
-			if len(keyStr) == 1 {
-				char := keyStr
-				if m.charLimit == 0 || utf8.RuneCountInString(m.Value()) < m.charLimit {
+			// Insert character(s) - allows paste to work
+			if len(keyStr) > 0 {
+				if m.charLimit == 0 || utf8.RuneCountInString(m.Value())+utf8.RuneCountInString(keyStr) <= m.charLimit {
 					currentLine := m.content[m.cursorY]
-					m.content[m.cursorY] = currentLine[:m.cursorX] + char + currentLine[m.cursorX:]
-					m.cursorX++
+					m.content[m.cursorY] = currentLine[:m.cursorX] + keyStr + currentLine[m.cursorX:]
+					m.cursorX += len(keyStr)
 				}
 			}
 		}
@@ -553,4 +593,25 @@ func (m *Model) CursorEnd() {
 	m.cursorY = len(m.content) - 1
 	m.cursorX = len(m.content[m.cursorY])
 	m.adjustScroll()
+}
+
+// CursorY returns the current cursor Y position
+func (m Model) CursorY() int {
+	return m.cursorY
+}
+
+// CursorX returns the current cursor X position
+func (m Model) CursorX() int {
+	return m.cursorX
+}
+
+// SetVisualMode sets whether the editor is in visual mode
+func (m *Model) SetVisualMode(visual bool) {
+	m.inVisualMode = visual
+}
+
+// SetVisualStart sets the start position for visual selection
+func (m *Model) SetVisualStart(x, y int) {
+	m.visualStartX = x
+	m.visualStartY = y
 }
