@@ -46,6 +46,18 @@ type YankCellMsg struct {
 	Content string
 }
 
+// YankQueryMsg is sent when user wants to copy the entire query to system clipboard
+type YankQueryMsg struct {
+	Content string
+}
+
+// UndoState represents a snapshot of the editor state for undo
+type UndoState struct {
+	content string
+	cursorX int
+	cursorY int
+}
+
 // Model represents the query editor component
 type Model struct {
 	syntaxEditor   syntaxeditor.Model
@@ -61,10 +73,12 @@ type Model struct {
 	resultHeight   int // Height of the result area
 	vimMode        VimMode
 	vimEnabled     bool
-	pendingCommand string // Pending vim command (e.g., "d" for dd)
-	yankBuffer     string // Buffer for yanked text
-	visualStartX   int    // Start X for visual selection
-	visualStartY   int    // Start Y for visual selection
+	pendingCommand string      // Pending vim command (e.g., "d" for dd)
+	yankBuffer     string      // Buffer for yanked text
+	visualStartX   int         // Start X for visual selection
+	visualStartY   int         // Start Y for visual selection
+	undoStack      []UndoState // Undo history stack
+	maxUndoSize    int         // Maximum undo history size
 }
 
 // New creates a new query editor model
@@ -90,7 +104,43 @@ func New(connectionName, databaseName string) Model {
 		yankBuffer:     "",
 		visualStartX:   0,
 		visualStartY:   0,
+		undoStack:      make([]UndoState, 0),
+		maxUndoSize:    100,
 	}
+}
+
+// saveUndoState saves the current editor state to the undo stack
+func (m *Model) saveUndoState() {
+	state := UndoState{
+		content: m.syntaxEditor.Value(),
+		cursorX: m.syntaxEditor.CursorX(),
+		cursorY: m.syntaxEditor.CursorY(),
+	}
+
+	// Limit undo stack size
+	if len(m.undoStack) >= m.maxUndoSize {
+		m.undoStack = m.undoStack[1:]
+	}
+
+	m.undoStack = append(m.undoStack, state)
+}
+
+// undo restores the previous editor state
+func (m *Model) undo() bool {
+	if len(m.undoStack) == 0 {
+		return false
+	}
+
+	// Pop the last state
+	lastIdx := len(m.undoStack) - 1
+	state := m.undoStack[lastIdx]
+	m.undoStack = m.undoStack[:lastIdx]
+
+	// Restore the state
+	m.syntaxEditor.SetValue(state.content)
+	m.syntaxEditor.SetCursorPosition(state.cursorX, state.cursorY)
+
+	return true
 }
 
 // SetSize sets the query editor dimensions
@@ -230,6 +280,15 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			// Format SQL
 			m.formatSQL()
 			return m, nil
+		case "ctrl+y":
+			// Copy entire query to system clipboard
+			query := m.GetQuery()
+			if query != "" {
+				return m, func() tea.Msg {
+					return YankQueryMsg{Content: query}
+				}
+			}
+			return m, nil
 		}
 
 		// If results table is focused, handle its input
@@ -314,6 +373,7 @@ func (m Model) handleVimNormal(msg tea.KeyMsg) (Model, tea.Cmd) {
 	if m.pendingCommand != "" {
 		if m.pendingCommand == "d" && keyStr == "d" {
 			// Delete line and yank it
+			m.saveUndoState() // Save state before delete
 			content := m.syntaxEditor.Value()
 			lines := strings.Split(content, "\n")
 			if len(lines) > 0 && m.syntaxEditor.CursorY() < len(lines) {
@@ -432,23 +492,33 @@ func (m Model) handleVimNormal(msg tea.KeyMsg) (Model, tea.Cmd) {
 	// Deletion
 	case "x":
 		// Delete character under cursor
+		m.saveUndoState()
 		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyDelete})
 		return m, nil
 	case "X":
 		// Delete character before cursor (backspace)
+		m.saveUndoState()
 		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyBackspace})
 		return m, nil
 	case "d":
 		m.pendingCommand = "d"
 		return m, nil
 
-	// Undo (if supported by textarea)
+	// Undo
 	case "u":
-		// Editor doesn't have built-in undo, but try ctrl+z
-		m.syntaxEditor, _ = m.syntaxEditor.Update(tea.KeyMsg{Type: tea.KeyCtrlZ})
+		m.undo()
 		return m, nil
 	case "y":
 		m.pendingCommand = "y"
+		return m, nil
+	case "Y":
+		// Yank entire query to system clipboard
+		query := m.GetQuery()
+		if query != "" {
+			return m, func() tea.Msg {
+				return YankQueryMsg{Content: query}
+			}
+		}
 		return m, nil
 	case "p":
 		// Paste yank buffer after cursor
@@ -477,6 +547,7 @@ func (m Model) handleVimNormal(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 	case "S":
 		// Substitute line: delete line and enter insert mode
+		m.saveUndoState()
 		content := m.syntaxEditor.Value()
 		lines := strings.Split(content, "\n")
 		cursorY := m.syntaxEditor.CursorY()
@@ -523,6 +594,7 @@ func (m Model) handleVimNormal(msg tea.KeyMsg) (Model, tea.Cmd) {
 		return m, nil
 	case "C":
 		// Change to end of line
+		m.saveUndoState()
 		content := m.syntaxEditor.Value()
 		lines := strings.Split(content, "\n")
 		cursorY := m.syntaxEditor.CursorY()
@@ -559,7 +631,15 @@ func (m Model) handleVimVisual(msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.syntaxEditor.SetCursorStyle(syntaxeditor.CursorBlock)
 		m.syntaxEditor.SetVisualMode(false)
 		return m, nil
+	case "u":
+		// Undo in visual mode
+		m.undo()
+		m.vimMode = VimNormal
+		m.syntaxEditor.SetCursorStyle(syntaxeditor.CursorBlock)
+		m.syntaxEditor.SetVisualMode(false)
+		return m, nil
 	case "d":
+		m.saveUndoState() // Save state before delete
 		m.deleteVisualSelection()
 		m.vimMode = VimNormal
 		m.syntaxEditor.SetCursorStyle(syntaxeditor.CursorBlock)
@@ -572,6 +652,7 @@ func (m Model) handleVimVisual(msg tea.KeyMsg) (Model, tea.Cmd) {
 		m.syntaxEditor.SetVisualMode(false)
 		return m, nil
 	case "c":
+		m.saveUndoState() // Save state before change
 		m.deleteVisualSelection()
 		m.vimMode = VimInsert
 		m.syntaxEditor.SetCursorStyle(syntaxeditor.CursorLine)
@@ -804,11 +885,11 @@ func (m Model) View() string {
 	if m.showResults && m.resultTable.Focused() {
 		statusText = "hjkl: Navigate | p: Preview | y: Yank | i: Back to Editor | Ctrl+R: Editor"
 	} else if m.vimMode == VimNormal {
-		statusText = "i: Insert | hjkl: Navigate | F5: Execute | Ctrl+F: Format | Ctrl+R: Results"
+		statusText = "i: Insert | hjkl: Navigate | Y: Copy Query | F5: Execute | Ctrl+F: Format"
 	} else if m.vimMode == VimVisual {
-		statusText = "hjkl: Select | d: Delete | y: Yank | c: Change | Esc: Normal"
+		statusText = "hjkl: Select | d: Delete | y: Yank | c: Change | u: Undo | Esc: Normal"
 	} else {
-		statusText = "Esc: Normal | F5/Ctrl+E: Execute | Ctrl+F: Format | Ctrl+R: Results"
+		statusText = "Esc: Normal | F5/Ctrl+E: Execute | Ctrl+Y: Copy Query | Ctrl+F: Format"
 	}
 	if m.lastError != "" {
 		statusText = lipgloss.NewStyle().

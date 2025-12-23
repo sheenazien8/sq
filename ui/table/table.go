@@ -8,6 +8,12 @@ import (
 	"github.com/sheenazien8/sq/ui/theme"
 )
 
+// NextPageMsg is sent when user wants to fetch the next page of results
+type NextPageMsg struct{}
+
+// PrevPageMsg is sent when user wants to fetch the previous page of results
+type PrevPageMsg struct{}
+
 // Column represents a table column with title and width
 type Column struct {
 	Title string
@@ -33,19 +39,57 @@ type Model struct {
 	cursorCol int
 
 	focused bool
+
+	// Pagination state
+	currentPage int
+	totalPages  int
+	totalRows   int
+	pageSize    int
 }
 
 // New creates a new table model
 func New(columns []Column, rows []Row) Model {
 	return Model{
-		columns:   columns,
-		rows:      rows,
-		colOffset: 0,
-		rowOffset: 0,
-		cursorRow: 0,
-		cursorCol: 0,
-		focused:   true,
+		columns:     columns,
+		rows:        rows,
+		colOffset:   0,
+		rowOffset:   0,
+		cursorRow:   0,
+		cursorCol:   0,
+		focused:     true,
+		currentPage: 1,
+		totalPages:  1,
+		totalRows:   len(rows),
+		pageSize:    100,
 	}
+}
+
+// SetPagination sets the pagination state
+func (m *Model) SetPagination(currentPage, totalPages, totalRows, pageSize int) {
+	m.currentPage = currentPage
+	m.totalPages = totalPages
+	m.totalRows = totalRows
+	m.pageSize = pageSize
+}
+
+// GetCurrentPage returns the current page number
+func (m Model) GetCurrentPage() int {
+	return m.currentPage
+}
+
+// GetTotalPages returns the total number of pages
+func (m Model) GetTotalPages() int {
+	return m.totalPages
+}
+
+// HasNextPage returns true if there is a next page
+func (m Model) HasNextPage() bool {
+	return m.currentPage < m.totalPages
+}
+
+// HasPrevPage returns true if there is a previous page
+func (m Model) HasPrevPage() bool {
+	return m.currentPage > 1
 }
 
 // SetSize sets the viewport dimensions
@@ -179,6 +223,16 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		case "pgdown", "J":
 			m.cursorRow = min(len(m.rows)-1, m.cursorRow+m.visibleRows())
 			m.rowOffset = min(m.maxRowOffset(), m.rowOffset+m.visibleRows())
+		case ">":
+			// Next page of query results
+			if m.HasNextPage() {
+				return m, func() tea.Msg { return NextPageMsg{} }
+			}
+		case "<":
+			// Previous page of query results
+			if m.HasPrevPage() {
+				return m, func() tea.Msg { return PrevPageMsg{} }
+			}
 		case "home":
 			m.cursorRow = 0
 			m.rowOffset = 0
@@ -344,7 +398,20 @@ func (m Model) renderStatusBar() string {
 	t := theme.Current
 
 	leftInfo := t.StatusBar.Render("Row " + intToStr(m.cursorRow+1) + "/" + intToStr(len(m.rows)) + ", Col " + intToStr(m.cursorCol+1) + "/" + intToStr(len(m.columns)))
-	rightInfo := t.StatusBar.Render("Cols " + intToStr(m.colOffset+1) + "-" + intToStr(min(m.colOffset+m.visibleCols(), len(m.columns))) + "/" + intToStr(len(m.columns)) + " | h/l:cell ←→")
+
+	// Build right info with pagination
+	var rightParts []string
+	rightParts = append(rightParts, "Cols "+intToStr(m.colOffset+1)+"-"+intToStr(min(m.colOffset+m.visibleCols(), len(m.columns)))+"/"+intToStr(len(m.columns)))
+
+	// Add pagination info if there are multiple pages
+	if m.totalPages > 1 {
+		rightParts = append(rightParts, "Page "+intToStr(m.currentPage)+"/"+intToStr(m.totalPages)+" ("+intToStr(m.totalRows)+" total)")
+		rightParts = append(rightParts, "</>:page")
+	}
+
+	rightParts = append(rightParts, "h/l:cell")
+
+	rightInfo := t.StatusBar.Render(strings.Join(rightParts, " | "))
 
 	// Calculate spacing
 	spacing := max(m.width-lipgloss.Width(leftInfo)-lipgloss.Width(rightInfo), 1)

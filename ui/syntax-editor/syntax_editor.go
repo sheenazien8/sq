@@ -615,3 +615,25 @@ func (m *Model) SetVisualStart(x, y int) {
 	m.visualStartX = x
 	m.visualStartY = y
 }
+
+// SetCursorPosition sets the cursor position
+func (m *Model) SetCursorPosition(x, y int) {
+	m.cursorY = y
+	m.cursorX = x
+
+	// Ensure bounds are valid
+	if m.cursorY < 0 {
+		m.cursorY = 0
+	}
+	if m.cursorY >= len(m.content) {
+		m.cursorY = len(m.content) - 1
+	}
+	if m.cursorX < 0 {
+		m.cursorX = 0
+	}
+	if m.cursorX > len(m.content[m.cursorY]) {
+		m.cursorX = len(m.content[m.cursorY])
+	}
+
+	m.adjustScroll()
+}

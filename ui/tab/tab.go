@@ -443,6 +443,18 @@ func (m *Model) SetFocused(focused bool) {
 	}
 }
 
+// SetActiveTabPagination sets pagination info on the active table tab
+func (m *Model) SetActiveTabPagination(currentPage, totalPages, totalRows, pageSize int) {
+	if m.activeTab >= 0 && m.activeTab < len(m.tabs) {
+		if m.tabs[m.activeTab].Type == TabTypeTable {
+			if tbl, ok := m.tabs[m.activeTab].Content.(table.Model); ok {
+				tbl.SetPagination(currentPage, totalPages, totalRows, pageSize)
+				m.tabs[m.activeTab].Content = tbl
+			}
+		}
+	}
+}
+
 // Focused returns whether the tabs are focused
 func (m Model) Focused() bool {
 	return m.focused

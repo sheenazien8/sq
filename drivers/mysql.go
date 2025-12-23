@@ -241,6 +241,217 @@ func (db *MySQL) GetTableDataWithFilter(database, table string, filters []Filter
 	return data, nil
 }
 
+// GetTableDataPaginated returns paginated table data
+func (db *MySQL) GetTableDataPaginated(database, table string, pagination Pagination) (*PaginatedResult, error) {
+	// Get total count
+	countQuery := "SELECT COUNT(*) FROM " + database + "." + table
+	var totalRows int
+	if err := db.Connection.QueryRow(countQuery).Scan(&totalRows); err != nil {
+		return nil, err
+	}
+
+	// Calculate offset
+	offset := (pagination.Page - 1) * pagination.PageSize
+	if offset < 0 {
+		offset = 0
+	}
+
+	// Get paginated data
+	query := "SELECT * FROM " + database + "." + table + " LIMIT " + strconv.Itoa(pagination.PageSize) + " OFFSET " + strconv.Itoa(offset)
+
+	logger.Debug("Executing paginated query", map[string]any{
+		"query":    query,
+		"page":     pagination.Page,
+		"pageSize": pagination.PageSize,
+		"offset":   offset,
+	})
+
+	rows, err := db.Connection.Query(query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+
+	var data [][]string
+	// Add header row
+	data = append(data, columns)
+
+	for rows.Next() {
+		values := make([]interface{}, len(columns))
+		valuePtrs := make([]interface{}, len(columns))
+		for i := range columns {
+			valuePtrs[i] = &values[i]
+		}
+
+		if err := rows.Scan(valuePtrs...); err != nil {
+			return nil, err
+		}
+
+		row := make([]string, len(columns))
+		for i, val := range values {
+			if val == nil {
+				row[i] = "NULL"
+			} else {
+				row[i] = formatSQLValue(val)
+			}
+		}
+		data = append(data, row)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Calculate total pages
+	totalPages := totalRows / pagination.PageSize
+	if totalRows%pagination.PageSize > 0 {
+		totalPages++
+	}
+
+	return &PaginatedResult{
+		Data:       data,
+		TotalRows:  totalRows,
+		Page:       pagination.Page,
+		PageSize:   pagination.PageSize,
+		TotalPages: totalPages,
+	}, nil
+}
+
+// GetTableDataWithFilterPaginated returns paginated and filtered table data
+func (db *MySQL) GetTableDataWithFilterPaginated(database, table string, filters []FilterCondition, pagination Pagination) (*PaginatedResult, error) {
+	baseQuery := "SELECT * FROM " + database + "." + table
+	countQuery := "SELECT COUNT(*) FROM " + database + "." + table
+
+	var whereClauses []string
+	var args []interface{}
+
+	// Build WHERE clause from filters
+	for _, f := range filters {
+		switch f.Operator {
+		case "=":
+			whereClauses = append(whereClauses, f.Column+" = ?")
+			args = append(args, f.Value)
+		case "!=":
+			whereClauses = append(whereClauses, f.Column+" != ?")
+			args = append(args, f.Value)
+		case "LIKE":
+			whereClauses = append(whereClauses, f.Column+" LIKE ?")
+			args = append(args, "%"+f.Value+"%")
+		case "NOT LIKE":
+			whereClauses = append(whereClauses, f.Column+" NOT LIKE ?")
+			args = append(args, "%"+f.Value+"%")
+		case ">":
+			whereClauses = append(whereClauses, f.Column+" > ?")
+			args = append(args, f.Value)
+		case "<":
+			whereClauses = append(whereClauses, f.Column+" < ?")
+			args = append(args, f.Value)
+		case ">=":
+			whereClauses = append(whereClauses, f.Column+" >= ?")
+			args = append(args, f.Value)
+		case "<=":
+			whereClauses = append(whereClauses, f.Column+" <= ?")
+			args = append(args, f.Value)
+		case "IS":
+			whereClauses = append(whereClauses, f.Column+" IS "+f.Value)
+		case "IS NOT":
+			whereClauses = append(whereClauses, f.Column+" IS NOT "+f.Value)
+		}
+	}
+
+	whereClause := ""
+	if len(whereClauses) > 0 {
+		whereClause = " WHERE " + whereClauses[0]
+		for i := 1; i < len(whereClauses); i++ {
+			whereClause += " AND " + whereClauses[i]
+		}
+	}
+
+	// Get total count with filters
+	var totalRows int
+	countQuery += whereClause
+	if err := db.Connection.QueryRow(countQuery, args...).Scan(&totalRows); err != nil {
+		return nil, err
+	}
+
+	// Calculate offset
+	offset := (pagination.Page - 1) * pagination.PageSize
+	if offset < 0 {
+		offset = 0
+	}
+
+	// Build final query with pagination
+	query := baseQuery + whereClause + " LIMIT " + strconv.Itoa(pagination.PageSize) + " OFFSET " + strconv.Itoa(offset)
+
+	logger.Debug("Executing filtered paginated query", map[string]any{
+		"query":      query,
+		"parameters": args,
+		"page":       pagination.Page,
+		"pageSize":   pagination.PageSize,
+		"offset":     offset,
+	})
+
+	rows, err := db.Connection.Query(query, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	columns, err := rows.Columns()
+	if err != nil {
+		return nil, err
+	}
+
+	var data [][]string
+	// Add header row
+	data = append(data, columns)
+
+	for rows.Next() {
+		values := make([]interface{}, len(columns))
+		valuePtrs := make([]interface{}, len(columns))
+		for i := range columns {
+			valuePtrs[i] = &values[i]
+		}
+
+		if err := rows.Scan(valuePtrs...); err != nil {
+			return nil, err
+		}
+
+		row := make([]string, len(columns))
+		for i, val := range values {
+			if val == nil {
+				row[i] = "NULL"
+			} else {
+				row[i] = formatSQLValue(val)
+			}
+		}
+		data = append(data, row)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Calculate total pages
+	totalPages := totalRows / pagination.PageSize
+	if totalRows%pagination.PageSize > 0 {
+		totalPages++
+	}
+
+	return &PaginatedResult{
+		Data:       data,
+		TotalRows:  totalRows,
+		Page:       pagination.Page,
+		PageSize:   pagination.PageSize,
+		TotalPages: totalPages,
+	}, nil
+}
+
 // formatSQLValue converts various SQL types to string
 func formatSQLValue(val interface{}) string {
 	if val == nil {

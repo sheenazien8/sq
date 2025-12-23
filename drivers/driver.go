@@ -11,6 +11,21 @@ type FilterCondition struct {
 	Value    string
 }
 
+// Pagination represents pagination parameters
+type Pagination struct {
+	Page     int
+	PageSize int
+}
+
+// PaginatedResult represents paginated query results
+type PaginatedResult struct {
+	Data       [][]string
+	TotalRows  int
+	Page       int
+	PageSize   int
+	TotalPages int
+}
+
 type Driver interface {
 	Connect(urlstr string) error
 	TestConnection(urlstr string) error
@@ -18,6 +33,10 @@ type Driver interface {
 	GetTableColumns(database, table string) ([][]string, error)
 	GetTableData(database, table string) ([][]string, error)
 	GetTableDataWithFilter(database, table string, filters []FilterCondition) ([][]string, error)
+
+	// Paginated data methods
+	GetTableDataPaginated(database, table string, pagination Pagination) (*PaginatedResult, error)
+	GetTableDataWithFilterPaginated(database, table string, filters []FilterCondition, pagination Pagination) (*PaginatedResult, error)
 
 	// Table structure methods
 	GetTableStructure(database, table string) (*TableStructure, error)

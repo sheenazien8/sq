@@ -68,6 +68,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case queryeditor.YankQueryMsg:
+		// Copy entire query to system clipboard
+		if msg.Content != "" {
+			err := clipboard.WriteAll(msg.Content)
+			if err != nil {
+				logger.Error("Failed to copy query to clipboard", map[string]any{"error": err.Error()})
+			} else {
+				logger.Info("Query copied to clipboard", map[string]any{"length": len(msg.Content)})
+			}
+		}
+		return m, nil
+
+	case table.NextPageMsg:
+		// Load next page of data
+		m = m.loadNextPage()
+		return m, nil
+
+	case table.PrevPageMsg:
+		// Load previous page of data
+		m = m.loadPrevPage()
+		return m, nil
+
 	case queryeditor.QueryExecuteMsg:
 		// Execute the query
 		logger.Debug("Query execute requested", map[string]any{
@@ -136,7 +158,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Load actual table data from database
-		err := m.loadTableData(msg.ConnectionName, msg.TableName)
+		paginatedResult, err := m.loadTableData(msg.ConnectionName, msg.TableName)
 		if err != nil {
 			logger.Error("Failed to load table data", map[string]any{
 				"connection": msg.ConnectionName,
@@ -156,6 +178,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Add tab with table data
 		tabName := msg.ConnectionName + "." + msg.TableName
 		m.Tabs.AddTableTab(tabName, m.columns, m.allRows)
+
+		// Set pagination info on the table
+		if paginatedResult != nil {
+			m.Tabs.SetActiveTabPagination(
+				paginatedResult.Page,
+				paginatedResult.TotalPages,
+				paginatedResult.TotalRows,
+				paginatedResult.PageSize,
+			)
+		}
 
 		// Set tab dimensions (filter bar is always 3 lines with border)
 		tableWidth := m.ContentWidth - 4
@@ -668,10 +700,10 @@ func extractDatabaseName(url, connType string) string {
 }
 
 // loadTableData loads table data from the database connection
-func (m *Model) loadTableData(connectionName, tableName string) error {
+func (m *Model) loadTableData(connectionName, tableName string) (*drivers.PaginatedResult, error) {
 	driver, exists := m.dbConnections[connectionName]
 	if !exists {
-		return fmt.Errorf("no active connection for %s", connectionName)
+		return nil, fmt.Errorf("no active connection for %s", connectionName)
 	}
 
 	// Extract database name from connection
@@ -685,7 +717,7 @@ func (m *Model) loadTableData(connectionName, tableName string) error {
 	}
 
 	if dbName == "" {
-		return fmt.Errorf("could not extract database name from connection")
+		return nil, fmt.Errorf("could not extract database name from connection")
 	}
 
 	// Store current context for filter reloading
@@ -696,7 +728,7 @@ func (m *Model) loadTableData(connectionName, tableName string) error {
 	// Get table columns
 	columnsData, err := driver.GetTableColumns(dbName, tableName)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// Convert columns to table.Column format
@@ -710,19 +742,27 @@ func (m *Model) loadTableData(connectionName, tableName string) error {
 		m.columnNames[i] = col[0]
 	}
 
-	// Get table data
-	data, err := driver.GetTableData(dbName, tableName)
-	if err != nil {
-		return err
+	// Get table data with pagination
+	pagination := drivers.Pagination{
+		Page:     1,
+		PageSize: m.pageSize,
 	}
+
+	result, err := driver.GetTableDataPaginated(dbName, tableName, pagination)
+	if err != nil {
+		return nil, err
+	}
+
+	// Update pagination state
+	m.currentPage = result.Page
 
 	// Convert data to table.Row format (skip header row since we have columns)
-	m.allRows = make([]table.Row, len(data)-1)
-	for i := 1; i < len(data); i++ {
-		m.allRows[i-1] = table.Row(data[i])
+	m.allRows = make([]table.Row, len(result.Data)-1)
+	for i := 1; i < len(result.Data); i++ {
+		m.allRows[i-1] = table.Row(result.Data[i])
 	}
 
-	return nil
+	return result, nil
 }
 
 // applyFilterToActiveTab reloads table data from database with filters
@@ -766,13 +806,21 @@ func (m Model) applyFilterToActiveTab() Model {
 		return m
 	}
 
-	var data [][]string
+	// Reset to page 1 when applying filters
+	m.currentPage = 1
+
+	pagination := drivers.Pagination{
+		Page:     1,
+		PageSize: m.pageSize,
+	}
+
+	var result *drivers.PaginatedResult
 	var err error
 
 	if len(filters) == 0 {
 		logger.Debug("Loading data without filters", map[string]any{})
-		// No filters - use regular query
-		data, err = driver.GetTableData(dbName, tableName)
+		// No filters - use paginated query
+		result, err = driver.GetTableDataPaginated(dbName, tableName, pagination)
 	} else {
 		logger.Debug("Loading data with filters", map[string]any{
 			"filter_count": len(filters),
@@ -788,8 +836,8 @@ func (m Model) applyFilterToActiveTab() Model {
 			}
 		}
 
-		// Load data with filters
-		data, err = driver.GetTableDataWithFilter(dbName, tableName, driverFilters)
+		// Load data with filters and pagination
+		result, err = driver.GetTableDataWithFilterPaginated(dbName, tableName, driverFilters, pagination)
 	}
 
 	if err != nil {
@@ -800,18 +848,21 @@ func (m Model) applyFilterToActiveTab() Model {
 	}
 
 	// Convert data to table.Row format (skip header row)
-	tableRows := make([]table.Row, len(data)-1)
-	for i := 1; i < len(data); i++ {
-		tableRows[i-1] = table.Row(data[i])
+	tableRows := make([]table.Row, len(result.Data)-1)
+	for i := 1; i < len(result.Data); i++ {
+		tableRows[i-1] = table.Row(result.Data[i])
 	}
 
 	logger.Debug("Filter result", map[string]any{
 		"filtered_rows": len(tableRows),
+		"total_rows":    result.TotalRows,
+		"total_pages":   result.TotalPages,
 	})
 
-	// Update tab with filtered data
+	// Update tab with filtered data and pagination
 	if tableModel, ok := activeTab.Content.(table.Model); ok {
 		tableModel.SetRows(tableRows)
+		tableModel.SetPagination(result.Page, result.TotalPages, result.TotalRows, result.PageSize)
 		m.Tabs.UpdateActiveTabContent(tableModel)
 	}
 
@@ -861,9 +912,9 @@ func (m Model) getFooterHelp() string {
 				return "F5/Ctrl+E: Execute | Ctrl+R: Toggle Focus | []: Switch Tab | Ctrl+W: Close | Tab: Sidebar | q: Quit"
 			}
 			if !m.sidebarCollapsed {
-				return "j/k/h/l: Navigate | e: Query | d: Structure | y: Yank | p: Preview | /: Filter | C: Clear | []: Switch Tab | s: Toggle Sidebar | q: Quit"
+				return "j/k/h/l: Navigate | </>: Page | e: Query | y: Yank | p: Preview | /: Filter | C: Clear | []: Tabs | q: Quit"
 			}
-			return "j/k/h/l: Navigate | e: Query | d: Structure | y: Yank | p: Preview | /: Filter | C: Clear | []: Switch Tab | s: Toggle Sidebar | q: Quit"
+			return "j/k/h/l: Navigate | </>: Page | e: Query | y: Yank | p: Preview | /: Filter | C: Clear | []: Tabs | q: Quit"
 		}
 		if !m.sidebarCollapsed {
 			return "s: Toggle Sidebar | Tab: Switch | T: Theme | q: Quit"
@@ -1021,4 +1072,121 @@ func getTableData() ([]table.Column, []table.Row) {
 	}
 
 	return columns, rows
+}
+
+// loadNextPage loads the next page of data for the active table tab
+func (m Model) loadNextPage() Model {
+	return m.loadPage(m.currentPage + 1)
+}
+
+// loadPrevPage loads the previous page of data for the active table tab
+func (m Model) loadPrevPage() Model {
+	if m.currentPage > 1 {
+		return m.loadPage(m.currentPage - 1)
+	}
+	return m
+}
+
+// loadPage loads a specific page of data for the active table tab
+func (m Model) loadPage(page int) Model {
+	activeTab := m.Tabs.ActiveTab()
+	if activeTab == nil {
+		return m
+	}
+
+	// Only handle table tabs (not structure or query tabs)
+	if activeTab.Type != tab.TabTypeTable {
+		return m
+	}
+
+	// Get connection and table info from tab name (format: "connection.table")
+	tabName := m.Tabs.GetActiveTabName()
+	parts := strings.Split(tabName, ".")
+	if len(parts) != 2 {
+		logger.Error("Invalid tab name format", map[string]any{"tab": tabName})
+		return m
+	}
+
+	connectionName := parts[0]
+	tableName := parts[1]
+
+	driver, exists := m.dbConnections[connectionName]
+	if !exists {
+		logger.Error("No active connection", map[string]any{"connection": connectionName})
+		return m
+	}
+
+	// Extract database name
+	connections := m.Sidebar.GetConnections()
+	var dbName string
+	for _, conn := range connections {
+		if conn.Name == connectionName {
+			dbName = extractDatabaseName(conn.Host, conn.Type)
+			break
+		}
+	}
+
+	if dbName == "" {
+		logger.Error("Could not extract database name", map[string]any{})
+		return m
+	}
+
+	// Get filters if any
+	filters := m.Tabs.GetActiveTabFilters()
+
+	pagination := drivers.Pagination{
+		Page:     page,
+		PageSize: m.pageSize,
+	}
+
+	var result *drivers.PaginatedResult
+	var err error
+
+	if len(filters) == 0 {
+		result, err = driver.GetTableDataPaginated(dbName, tableName, pagination)
+	} else {
+		// Convert filter.Filter to drivers.FilterCondition
+		driverFilters := make([]drivers.FilterCondition, len(filters))
+		for i, f := range filters {
+			driverFilters[i] = drivers.FilterCondition{
+				Column:   f.Column,
+				Operator: string(f.Operator),
+				Value:    f.Value,
+			}
+		}
+		result, err = driver.GetTableDataWithFilterPaginated(dbName, tableName, driverFilters, pagination)
+	}
+
+	if err != nil {
+		logger.Error("Failed to load paginated data", map[string]any{
+			"error": err.Error(),
+			"page":  page,
+		})
+		return m
+	}
+
+	// Update current page
+	m.currentPage = result.Page
+
+	// Convert data to table.Row format (skip header row)
+	tableRows := make([]table.Row, len(result.Data)-1)
+	for i := 1; i < len(result.Data); i++ {
+		tableRows[i-1] = table.Row(result.Data[i])
+	}
+
+	logger.Debug("Loaded page", map[string]any{
+		"page":        result.Page,
+		"total_pages": result.TotalPages,
+		"total_rows":  result.TotalRows,
+		"rows_loaded": len(tableRows),
+	})
+
+	// Update tab with paginated data
+	if tableModel, ok := activeTab.Content.(table.Model); ok {
+		tableModel.SetRows(tableRows)
+		tableModel.SetPagination(result.Page, result.TotalPages, result.TotalRows, result.PageSize)
+		m.Tabs.UpdateActiveTabContent(tableModel)
+	}
+
+	return m
 }

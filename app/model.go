@@ -52,6 +52,10 @@ type Model struct {
 	currentDatabase   string
 	currentTable      string
 
+	// Pagination state
+	currentPage int
+	pageSize    int
+
 	TerminalWidth  int
 	TerminalHeight int
 
@@ -109,5 +113,7 @@ func New() Model {
 		dbConnections:         make(map[string]drivers.Driver),
 		themeIndex:            themeIdx,
 		config:                cfg,
+		currentPage:           1,
+		pageSize:              100,
 	}
 }
