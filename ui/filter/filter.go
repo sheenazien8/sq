@@ -234,3 +234,16 @@ func padOperator(op string) string {
 func (m *Model) SetActive(active bool) {
 	m.active = active
 }
+
+// SetFilter sets the filter from an existing filter (used when switching tabs)
+func (m *Model) SetFilter(f *Filter) {
+	if f != nil {
+		m.filterInput.SetValue(f.WhereClause)
+		m.currentFilter = f
+		m.active = true
+	} else {
+		m.filterInput.SetValue("")
+		m.currentFilter = nil
+		m.active = false
+	}
+}

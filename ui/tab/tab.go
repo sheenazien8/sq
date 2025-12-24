@@ -34,6 +34,12 @@ const (
 	TabTypeQuery
 )
 
+// TabSwitchedMsg is sent when the active tab changes
+type TabSwitchedMsg struct {
+	TabIndex int
+	TabName  string
+}
+
 // StructureSection represents which section of structure is active
 type StructureSection int
 
@@ -846,13 +852,13 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			switch msg.String() {
 			case "]":
 				m.NextTab()
-				return m, nil
+				return m, m.tabSwitchedCmd()
 			case "[":
 				m.PrevTab()
-				return m, nil
+				return m, m.tabSwitchedCmd()
 			case "ctrl+w":
 				m.CloseTab(m.activeTab)
-				return m, nil
+				return m, m.tabSwitchedCmd()
 			default:
 				if qe, ok := m.tabs[m.activeTab].Content.(queryeditor.Model); ok {
 					var cmd tea.Cmd
@@ -866,10 +872,13 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		switch msg.String() {
 		case "]":
 			m.NextTab()
+			return m, m.tabSwitchedCmd()
 		case "[":
 			m.PrevTab()
+			return m, m.tabSwitchedCmd()
 		case "ctrl+w":
 			m.CloseTab(m.activeTab)
+			return m, m.tabSwitchedCmd()
 		default:
 			switch m.tabs[m.activeTab].Type {
 			case TabTypeTable:
@@ -891,6 +900,19 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+// tabSwitchedCmd returns a command that sends a TabSwitchedMsg
+func (m Model) tabSwitchedCmd() tea.Cmd {
+	if m.activeTab < 0 || m.activeTab >= len(m.tabs) {
+		return nil
+	}
+	return func() tea.Msg {
+		return TabSwitchedMsg{
+			TabIndex: m.activeTab,
+			TabName:  m.tabs[m.activeTab].Name,
+		}
+	}
 }
 
 // View renders the tab interface

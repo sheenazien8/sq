@@ -90,6 +90,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m = m.loadPrevPage()
 		return m, nil
 
+	case tab.TabSwitchedMsg:
+		// Update filter UI to show the new tab's filter
+		m = m.updateFilterForActiveTab()
+		m = m.updateFooter()
+		return m, nil
+
 	case queryeditor.QueryExecuteMsg:
 		// Execute the query
 		logger.Debug("Query execute requested", map[string]any{
@@ -193,6 +199,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		tableWidth := m.ContentWidth - 4
 		tableHeight := m.ContentHeight - 3 - 2
 		m.Tabs.SetSize(tableWidth, tableHeight)
+
+		// Update filter UI to show the new tab's filter (which is empty for a new tab)
+		m = m.updateFilterForActiveTab()
 
 		// Switch focus to main area
 		m.Focus = FocusMain
@@ -420,6 +429,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.Sidebar.SetFocused(true)
 					m.Tabs.SetFocused(false)
 				}
+				m = m.updateFilterForActiveTab()
 				m = m.updateFooter()
 				return m, nil
 			default:
@@ -592,6 +602,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				err := m.goToForeignKeyDefinition()
 				if err != nil {
 					logger.Error("Failed to go to foreign key definition", map[string]any{"error": err.Error()})
+				} else {
+					// Update filter UI for the new tab
+					m = m.updateFilterForActiveTab()
 				}
 				return m, nil
 			}
@@ -604,6 +617,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				err := m.loadTableStructure()
 				if err != nil {
 					logger.Error("Failed to load table structure", map[string]any{"error": err.Error()})
+				} else {
+					// Update filter UI for the new tab (structure tabs have no filter)
+					m = m.updateFilterForActiveTab()
 				}
 				return m, nil
 			} else if m.Focus == FocusSidebar {
@@ -629,6 +645,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.Focus = FocusMain
 							m.Sidebar.SetFocused(false)
 							m.Tabs.SetFocused(true)
+							m = m.updateFilterForActiveTab()
 							m = m.updateFooter()
 						}
 						return m, nil
@@ -666,6 +683,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					tableWidth := m.ContentWidth - 4
 					tableHeight := m.ContentHeight - 3 - 2
 					m.Tabs.SetSize(tableWidth, tableHeight)
+
+					// Update filter UI for the new tab (query tabs have no filter)
+					m = m.updateFilterForActiveTab()
 
 					// Switch focus to main area
 					m.Focus = FocusMain
@@ -959,22 +979,13 @@ func (m Model) updateFooter() Model {
 // updateFilterForActiveTab updates the filter input to show the current tab's filter
 func (m Model) updateFilterForActiveTab() Model {
 	if !m.Tabs.HasTabs() {
-		m.Filter.SetText("")
-		m.Filter.Clear()
+		m.Filter.SetFilter(nil)
 		return m
 	}
 
-	// Get the active tab's filter
+	// Get the active tab's filter and set it on the filter UI
 	activeFilter := m.Tabs.GetActiveTabFilter()
-	if activeFilter != nil {
-		// Update filter input with current tab's filter
-		m.Filter.SetText(activeFilter.WhereClause)
-		m.Filter.SetActive(true)
-	} else {
-		// Clear filter input if no active filter
-		m.Filter.SetText("")
-		m.Filter.Clear()
-	}
+	m.Filter.SetFilter(activeFilter)
 
 	return m
 }
@@ -1221,9 +1232,9 @@ func (m *Model) goToForeignKeyDefinition() error {
 	targetTabName := connectionName + "." + referencedTable
 	m.Tabs.AddTableTab(targetTabName, targetColumns, rows)
 
-    tableWidth := m.ContentWidth - 4
-    tableHeight := m.ContentHeight - 3 - 2
-    m.Tabs.SetSize(tableWidth, tableHeight)
+	tableWidth := m.ContentWidth - 4
+	tableHeight := m.ContentHeight - 3 - 2
+	m.Tabs.SetSize(tableWidth, tableHeight)
 
 	return nil
 }
