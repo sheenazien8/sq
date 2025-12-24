@@ -18,6 +18,11 @@ type PrevPageMsg struct{}
 type Column struct {
 	Title string
 	Width int // Default/max width
+
+	// Foreign key information
+	IsForeignKey     bool
+	ReferencedTable  string
+	ReferencedColumn string
 }
 
 // Row is a slice of strings representing a table row
@@ -114,6 +119,11 @@ func (m Model) Focused() bool {
 // Cursor returns the current cursor row
 func (m Model) Cursor() int {
 	return m.cursorRow
+}
+
+// CursorCol returns the current cursor column
+func (m Model) CursorCol() int {
+	return m.cursorCol
 }
 
 // SelectedRow returns the currently selected row
@@ -330,6 +340,12 @@ func (m Model) renderHeaderLine(startCol, endCol int) string {
 		col := m.columns[i]
 		effectiveWidth := m.getEffectiveColumnWidth(i)
 		cellText := truncateOrPad(col.Title, effectiveWidth)
+
+		// Add visual indicator for foreign key columns
+		if col.IsForeignKey {
+			cellText = truncateOrPad(col.Title+" [FK]", effectiveWidth)
+		}
+
 		cell := t.TableHeader.Render(" " + cellText + " ")
 		cells = append(cells, cell)
 	}

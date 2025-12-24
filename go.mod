@@ -8,6 +8,7 @@ require (
 	github.com/charmbracelet/bubbles v0.17.1
 	github.com/charmbracelet/bubbletea v0.25.0
 	github.com/charmbracelet/lipgloss v0.9.1
+	github.com/cockroachdb/cockroachdb-parser v0.0.0-20221207165326-ea0ac1a4778b
 	github.com/go-sql-driver/mysql v1.9.3
 	github.com/mjibson/sqlfmt v0.5.0
 	github.com/xo/dburl v0.23.8
@@ -19,7 +20,6 @@ require (
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
 	github.com/biogo/store v0.0.0-20201120204734-aad293a2328f // indirect
 	github.com/cockroachdb/apd/v3 v3.1.0 // indirect
-	github.com/cockroachdb/cockroachdb-parser v0.0.0-20221207165326-ea0ac1a4778b // indirect
 	github.com/cockroachdb/errors v1.9.0 // indirect
 	github.com/cockroachdb/logtags v0.0.0-20211118104740-dabe8e521a4f // indirect
 	github.com/cockroachdb/redact v1.1.3 // indirect
