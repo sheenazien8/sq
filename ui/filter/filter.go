@@ -25,6 +25,11 @@ type Model struct {
 
 	// Current filter
 	currentFilter *Filter
+
+	// Word completion state
+	currentWord string
+	wordStart   int // Position where current word starts
+	wordEnd     int // Position where current word ends
 }
 
 // New creates a new filter model
@@ -41,16 +46,24 @@ func NewWithText(columns []string, initialText string) Model {
 	ti.SetValue(initialText)
 	ti.Blur() // Start blurred
 
+	// Enable autocomplete suggestions for column names
+	ti.ShowSuggestions = true
+
 	// Sort columns alphabetically
 	sortedColumns := make([]string, len(columns))
 	copy(sortedColumns, columns)
 	sort.Strings(sortedColumns)
 
-	return Model{
+	m := Model{
 		columns:     sortedColumns,
 		filterInput: ti,
 		active:      false,
 	}
+
+	// Set column suggestions - textinput automatically filters based on input
+	m.filterInput.SetSuggestions(sortedColumns)
+
+	return m
 }
 
 // SetColumns updates the available columns
@@ -61,6 +74,10 @@ func (m *Model) SetColumns(columns []string) {
 	sort.Strings(sortedColumns)
 
 	m.columns = sortedColumns
+	// Update autocomplete suggestions
+	m.filterInput.SetSuggestions(sortedColumns)
+	// Update word completion
+	m.updateWordCompletion()
 }
 
 // SetWidth sets the component width
@@ -76,6 +93,7 @@ func (m *Model) SetWidth(width int) {
 // Focus focuses the filter input
 func (m *Model) Focus() {
 	m.filterInput.Focus()
+	m.updateWordCompletion()
 }
 
 // Blur blurs the filter input
@@ -166,8 +184,35 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// Update word completion before processing other keys
+		m.updateWordCompletion()
+
+		// Handle tab completion for current word
+		if key == "tab" && m.currentWord != "" {
+			availableSuggestions := m.filterInput.AvailableSuggestions()
+			if len(availableSuggestions) > 0 {
+				currentSuggestion := availableSuggestions[0] // Use first available suggestion
+				// Insert the suggestion into the current word position
+				text := m.filterInput.Value()
+				beforeWord := text[:m.wordStart]
+				afterWord := text[m.wordEnd:]
+				newText := beforeWord + currentSuggestion + afterWord
+				m.filterInput.SetValue(newText)
+
+				// Move cursor to end of completed word
+				newCursorPos := m.wordStart + len(currentSuggestion)
+				m.filterInput.SetCursor(newCursorPos)
+
+				// Update word completion for new position
+				m.updateWordCompletion()
+
+				return m, nil
+			}
+		}
+
 		// Pass other keys to text input
 		m.filterInput, cmd = m.filterInput.Update(msg)
+
 		return m, cmd
 	}
 
@@ -245,5 +290,85 @@ func (m *Model) SetFilter(f *Filter) {
 		m.filterInput.SetValue("")
 		m.currentFilter = nil
 		m.active = false
+	}
+}
+
+// findWordBoundaries finds the start and end positions of the word at the cursor
+func (m *Model) findWordBoundaries(text string, cursorPos int) (start, end int) {
+	if cursorPos > len(text) {
+		cursorPos = len(text)
+	}
+
+	// Find word start (go backwards until we hit a non-word character)
+	start = cursorPos
+	for start > 0 && isWordChar(text[start-1]) {
+		start--
+	}
+
+	// Find word end (go forwards until we hit a non-word character)
+	end = cursorPos
+	for end < len(text) && isWordChar(text[end]) {
+		end++
+	}
+
+	return start, end
+}
+
+// isWordChar determines if a character is part of a word (alphanumeric, underscore)
+func isWordChar(c byte) bool {
+	return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '_'
+}
+
+// updateWordCompletion updates the current word and suggestions based on cursor position
+func (m *Model) updateWordCompletion() {
+	text := m.filterInput.Value()
+	cursorPos := m.filterInput.Position()
+
+	// Find word boundaries
+	start, end := m.findWordBoundaries(text, cursorPos)
+	m.wordStart = start
+	m.wordEnd = end
+
+	// Get current word
+	if start < end {
+		m.currentWord = text[start:end]
+	} else {
+		m.currentWord = ""
+	}
+
+	// Update suggestions based on current word
+	if m.currentWord != "" {
+		var filteredSuggestions []string
+		currentWordLower := strings.ToLower(m.currentWord)
+		for _, col := range m.columns {
+			if strings.HasPrefix(strings.ToLower(col), currentWordLower) {
+				filteredSuggestions = append(filteredSuggestions, col)
+			}
+		}
+
+		// If no exact prefix matches, also include contains matches for better UX
+		if len(filteredSuggestions) == 0 {
+			for _, col := range m.columns {
+				if strings.Contains(strings.ToLower(col), currentWordLower) {
+					filteredSuggestions = append(filteredSuggestions, col)
+				}
+			}
+		}
+
+		// If still no matches, show columns that start with any character from the current word
+		if len(filteredSuggestions) == 0 && len(m.currentWord) > 0 {
+			firstChar := string(currentWordLower[0])
+			for _, col := range m.columns {
+				if strings.HasPrefix(strings.ToLower(col), firstChar) {
+					filteredSuggestions = append(filteredSuggestions, col)
+				}
+			}
+		}
+
+		// Always show suggestions when typing a word
+		m.filterInput.SetSuggestions(filteredSuggestions)
+	} else {
+		// Show all columns when not actively typing a word
+		m.filterInput.SetSuggestions(m.columns)
 	}
 }
