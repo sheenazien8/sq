@@ -551,6 +551,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Clear table filters
 				m.Tabs.ClearActiveTabFilters()
 				m = m.applyFilterToActiveTab()
+				m = m.updateFilterForActiveTab()
 				m = m.updateTabSize()
 			}
 
@@ -1231,6 +1232,11 @@ func (m *Model) goToForeignKeyDefinition() error {
 	// Create new tab for referenced table
 	targetTabName := connectionName + "." + referencedTable
 	m.Tabs.AddTableTab(targetTabName, targetColumns, rows)
+
+	// Set the filter on the new tab so it shows in the filter bar
+	m.Tabs.AddActiveTabFilter(filter.Filter{
+		WhereClause: whereClause,
+	})
 
 	tableWidth := m.ContentWidth - 4
 	tableHeight := m.ContentHeight - 3 - 2
