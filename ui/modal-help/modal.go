@@ -79,6 +79,7 @@ func NewHelpContent() *HelpContent {
 					{"<", "Previous page (query)"},
 					{"y", "Yank (copy) cell"},
 					{"p", "Preview cell content"},
+					{"gd", "Go to definition (FK)"},
 					{"/", "Focus filter"},
 					{"C", "Clear filter"},
 					{"e", "Open query editor"},

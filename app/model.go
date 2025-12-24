@@ -58,6 +58,9 @@ type Model struct {
 	currentPage int
 	pageSize    int
 
+	// Key sequence state for multi-key commands
+	gPressed bool // Track if 'g' was pressed for 'gd' sequence
+
 	TerminalWidth  int
 	TerminalHeight int
 
