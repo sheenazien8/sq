@@ -121,7 +121,7 @@ func (m Model) View() string {
 	dialogStyle := lipgloss.NewStyle().
 		Border(lipgloss.DoubleBorder()).
 		BorderForeground(t.Colors.Primary).
-		Padding(1, 3).
+		Padding(1, 2).
 		Align(lipgloss.Center)
 
 	titleStyle := lipgloss.NewStyle().
