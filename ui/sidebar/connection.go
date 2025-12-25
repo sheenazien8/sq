@@ -67,7 +67,7 @@ type Model struct {
 // New creates a new sidebar model with sample databases
 func New() Model {
 	ti := textinput.New()
-	ti.Placeholder = "filter connections/tables..."
+	ti.Placeholder = "Search"
 	ti.CharLimit = 50
 
 	return Model{
@@ -207,52 +207,12 @@ func (m Model) GetFilterInput() textinput.Model {
 // ClearFilterInput clears the filter input
 func (m *Model) ClearFilterInput() {
 	m.filterInput = textinput.New()
-	m.filterInput.Placeholder = "filter connections/tables..."
+	m.filterInput.Placeholder = "Search"
 	m.filterInput.CharLimit = 50
 	if m.showFilter {
 		m.filterInput.Focus()
 	}
 	m.filterText = ""
-}
-
-// getFilteredConnections returns connections filtered by the current filter text
-func (m Model) getFilteredConnections() []Connection {
-	if m.filterText == "" {
-		return m.connections
-	}
-
-	var filtered []Connection
-	filterLower := strings.ToLower(m.filterText)
-
-	for _, conn := range m.connections {
-		connLower := strings.ToLower(conn.Name)
-
-		// Check if connection name matches
-		if strings.Contains(connLower, filterLower) {
-			filtered = append(filtered, conn)
-			continue
-		}
-
-		// Check if any table name matches
-		var matchingTables []Table
-		for _, table := range conn.Tables {
-			tableLower := strings.ToLower(table.Name)
-			if strings.Contains(tableLower, filterLower) {
-				matchingTables = append(matchingTables, table)
-			}
-		}
-
-		// If tables match, include connection with only matching tables
-		if len(matchingTables) > 0 {
-			filteredConn := conn
-			filteredConn.Tables = matchingTables
-			// Expand connection if it has matching tables
-			filteredConn.Expanded = true
-			filtered = append(filtered, filteredConn)
-		}
-	}
-
-	return filtered
 }
 
 // Cursor returns the current cursor position
@@ -427,7 +387,7 @@ func (m Model) visibleItems() int {
 	if m.showFilter {
 		extraLines = 1
 	}
-	return max(0, m.height-5-extraLines)
+	return max(0, m.height-7-extraLines)
 }
 
 // Init initializes the model
@@ -557,9 +517,14 @@ func (m Model) View() string {
 	// Title
 	titleText := " Databases"
 	if m.filterText != "" && !m.showFilter {
-		titleText += " (filtered: " + m.filterText + ")"
+		titleText = " (filtered: " + m.filterText + ")"
 	}
-	title := t.SidebarTitle.Width(innerWidth).Render(titleText)
+	title := t.SidebarTitle.
+        Align(lipgloss.Center, lipgloss.Center).
+        Width(innerWidth).
+        Height(3).
+        Render(titleText)
+
 	lines = append(lines, title)
 
 	// Separator
@@ -666,7 +631,7 @@ func (m Model) View() string {
 	}
 
 	return borderStyle.
-		Width(m.width - 2).
+		Width(m.width - 4).
 		Height(m.height - 2).
 		Render(content)
 }

@@ -15,6 +15,10 @@ type Filter struct {
 	WhereClause string // Raw WHERE clause text (e.g., "name = 'John'")
 }
 
+type MapKeyMsg struct {
+	Key string
+}
+
 // Model represents the filter input component
 type Model struct {
 	columns     []string // Available column names
@@ -168,20 +172,32 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		// Handle enter to apply and blur
 		if key == "enter" {
 			m.Apply()
-			m.filterInput.Blur()
-			return m, nil
+			m.Blur()
+			return m, func() tea.Msg {
+				return MapKeyMsg{
+					Key: key,
+				}
+			}
 		}
 
 		// Handle escape to blur without applying
 		if key == "esc" {
-			m.filterInput.Blur()
-			return m, nil
+			m.Blur()
+			return m, func() tea.Msg {
+				return MapKeyMsg{
+					Key: key,
+				}
+			}
 		}
 
 		// Handle clear
 		if key == "ctrl+c" {
 			m.Clear()
-			return m, nil
+			return m, func() tea.Msg {
+				return MapKeyMsg{
+					Key: key,
+				}
+			}
 		}
 
 		// Update word completion before processing other keys
