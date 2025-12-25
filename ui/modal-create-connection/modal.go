@@ -1,9 +1,12 @@
 package modalcreateconnection
 
 import (
+	"fmt"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sheenazien8/sq/drivers"
 	"github.com/sheenazien8/sq/logger"
 	"github.com/sheenazien8/sq/ui/modal"
 	"github.com/sheenazien8/sq/ui/theme"
@@ -12,60 +15,129 @@ import (
 type FocusField int
 
 const (
-	FocusNameInput FocusField = iota
-	FocusDriverInput
-	FocusUrlInput
+	FocusDriverSelect FocusField = iota
+	FocusNameInput
+	FocusHostInput
+	FocusPortInput
+	FocusUsernameInput
+	FocusPasswordInput
+	FocusDatabaseInput
 	FocusSubmitButton
 	FocusCancelButton
 )
 
+// ConnectionFields holds all connection input fields
+type ConnectionFields struct {
+	nameInput     textinput.Model
+	hostInput     textinput.Model
+	portInput     textinput.Model
+	usernameInput textinput.Model
+	passwordInput textinput.Model
+	databaseInput textinput.Model
+}
+
 // Content implements modal.Content for creating a new connection
 type Content struct {
-	drivers     []string
-	driverIndex int
-	urlInput    textinput.Model
-	nameInput   textinput.Model
-
-	focusField FocusField
-
-	result modal.Result
-	closed bool
-	width  int
+	drivers        []string
+	driverIndex    int // 0 = MySQL, 1 = PostgreSQL
+	focusField     FocusField
+	result         modal.Result
+	closed         bool
+	width          int
+	mysqlFields    ConnectionFields
+	postgresFields ConnectionFields
 }
 
 // NewContent creates a new create connection content
 func NewContent() *Content {
-	nameInput := textinput.New()
-	nameInput.Placeholder = "Your connection name"
-	nameInput.CharLimit = 256
-	nameInput.Width = 50
-
-	urlInput := textinput.New()
-	urlInput.Placeholder = "mysql://user:password@localhost:3306/dbname"
-	urlInput.CharLimit = 256
-	urlInput.Width = 50
-
-	nameInput.Focus() // Focus name input by default
+	mysql := createConnectionFields()
+	postgres := createConnectionFields()
 
 	return &Content{
-		drivers:     []string{"mysql"},
-		driverIndex: 0,
-		urlInput:    urlInput,
-		nameInput:   nameInput,
-		focusField:  FocusNameInput,
-		result:      modal.ResultNone,
-		closed:      false,
+		drivers:        []string{"mysql", "postgresql"},
+		driverIndex:    0,
+		focusField:     FocusDriverSelect,
+		result:         modal.ResultNone,
+		closed:         false,
+		mysqlFields:    mysql,
+		postgresFields: postgres,
 	}
+}
+
+func createConnectionFields() ConnectionFields {
+	nameInput := textinput.New()
+	nameInput.Placeholder = "e.g., My Database"
+	nameInput.CharLimit = 256
+	nameInput.Width = 40
+
+	hostInput := textinput.New()
+	hostInput.Placeholder = "localhost"
+	hostInput.CharLimit = 256
+	hostInput.Width = 40
+	hostInput.SetValue("localhost")
+
+	portInput := textinput.New()
+	portInput.CharLimit = 5
+	portInput.Width = 40
+	portInput.SetValue("3306") // Default MySQL port
+
+	usernameInput := textinput.New()
+	usernameInput.Placeholder = "root"
+	usernameInput.CharLimit = 256
+	usernameInput.Width = 40
+	usernameInput.SetValue("root")
+
+	passwordInput := textinput.New()
+	passwordInput.Placeholder = "password"
+	passwordInput.CharLimit = 256
+	passwordInput.Width = 40
+	passwordInput.EchoMode = textinput.EchoPassword
+
+	databaseInput := textinput.New()
+	databaseInput.Placeholder = "database name"
+	databaseInput.CharLimit = 256
+	databaseInput.Width = 40
+
+	return ConnectionFields{
+		nameInput:     nameInput,
+		hostInput:     hostInput,
+		portInput:     portInput,
+		usernameInput: usernameInput,
+		passwordInput: passwordInput,
+		databaseInput: databaseInput,
+	}
+}
+
+// getCurrentFields returns the current driver's fields
+func (c *Content) getCurrentFields() *ConnectionFields {
+	if c.driverIndex == 0 {
+		return &c.mysqlFields
+	}
+	return &c.postgresFields
+}
+
+// getDefaultPort returns the default port for the current driver
+func (c *Content) getDefaultPort() string {
+	if c.driverIndex == 0 {
+		return "3306"
+	}
+	return "5432"
+}
+
+// setDefaultPort sets the port to the default for the current driver
+func (c *Content) setDefaultPort() {
+	fields := c.getCurrentFields()
+	fields.portInput.SetValue(c.getDefaultPort())
 }
 
 func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 	var cmd tea.Cmd
+	fields := c.getCurrentFields()
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		// Handle text input first when focused on URL field
-		// This allows typing h, l, j, k etc. in the text input
-		if c.focusField == FocusUrlInput {
+		// Handle text input fields
+		if c.focusField >= FocusHostInput && c.focusField <= FocusDatabaseInput {
 			switch msg.String() {
 			case "esc":
 				logger.Debug("Create connection cancelled", nil)
@@ -73,19 +145,50 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 				c.closed = true
 				return c, nil
 			case "tab", "down":
-				// Allow navigation out of text input
-				c.focusField = (c.focusField + 1) % 5
+				c.focusField = (c.focusField + 1)
+				if c.focusField > FocusDatabaseInput {
+					c.focusField = FocusSubmitButton
+				}
 				c.updateFocus()
 				return c, nil
 			case "shift+tab", "up":
-				// Allow navigation out of text input
-				c.focusField = (c.focusField - 1 + 5) % 5
+				if c.focusField == FocusHostInput {
+					c.focusField = FocusNameInput
+				} else {
+					c.focusField = (c.focusField - 1)
+				}
 				c.updateFocus()
 				return c, nil
 			default:
 				// Pass all other keys to text input
-				c.urlInput, cmd = c.urlInput.Update(msg)
-				return c, cmd
+				fields.handleInputUpdate(msg, c.focusField)
+				return c, nil
+			}
+		}
+
+		if c.focusField == FocusDriverSelect {
+			switch msg.String() {
+			case "esc":
+				logger.Debug("Create connection cancelled", nil)
+				c.result = modal.ResultCancel
+				c.closed = true
+				return c, nil
+			case "tab":
+				c.focusField = FocusNameInput
+				c.updateFocus()
+				return c, nil
+			case "shift+tab":
+				c.focusField = FocusDriverSelect
+				c.updateFocus()
+				return c, nil
+			case "k":
+				c.driverIndex = (c.driverIndex - 1 + len(c.drivers)) % len(c.drivers)
+				c.setDefaultPort()
+				return c, nil
+			case "j":
+				c.driverIndex = (c.driverIndex + 1) % len(c.drivers)
+				c.setDefaultPort()
+				return c, nil
 			}
 		}
 
@@ -97,18 +200,16 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 				c.closed = true
 				return c, nil
 			case "tab", "down":
-				// Allow navigation out of text input
-				c.focusField = (c.focusField + 1) % 5
+				c.focusField = FocusHostInput
 				c.updateFocus()
 				return c, nil
 			case "shift+tab", "up":
-				// Allow navigation out of text input
-				c.focusField = (c.focusField - 1 + 5) % 5
+				c.focusField = FocusDriverSelect
 				c.updateFocus()
 				return c, nil
 			default:
 				// Pass all other keys to text input
-				c.nameInput, cmd = c.nameInput.Update(msg)
+				fields.nameInput, cmd = fields.nameInput.Update(msg)
 				return c, cmd
 			}
 		}
@@ -122,27 +223,31 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 
 		case "tab", "down", "j":
 			// Cycle forward through fields
-			c.focusField = (c.focusField + 1) % 5
+			if c.focusField < FocusCancelButton {
+				c.focusField = (c.focusField + 1) % (FocusCancelButton + 1)
+			}
 			c.updateFocus()
 
 		case "shift+tab", "up", "k":
 			// Cycle backward through fields
-			c.focusField = (c.focusField - 1 + 5) % 5
+			if c.focusField > FocusNameInput {
+				c.focusField = (c.focusField - 1)
+			} else {
+				c.focusField = FocusCancelButton
+			}
 			c.updateFocus()
 
 		case "left", "h":
-			if c.focusField == FocusDriverInput {
-				c.driverIndex = (c.driverIndex - 1 + len(c.drivers)) % len(c.drivers)
-			} else if c.focusField == FocusSubmitButton {
+			// Navigate buttons
+			if c.focusField == FocusSubmitButton {
 				c.focusField = FocusCancelButton
 			} else if c.focusField == FocusCancelButton {
 				c.focusField = FocusSubmitButton
 			}
 
 		case "right", "l":
-			if c.focusField == FocusDriverInput {
-				c.driverIndex = (c.driverIndex + 1) % len(c.drivers)
-			} else if c.focusField == FocusSubmitButton {
+			// Navigate buttons
+			if c.focusField == FocusSubmitButton {
 				c.focusField = FocusCancelButton
 			} else if c.focusField == FocusCancelButton {
 				c.focusField = FocusSubmitButton
@@ -152,8 +257,9 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 			if c.focusField == FocusSubmitButton {
 				logger.Info("Connection submitted", map[string]any{
 					"driver": c.drivers[c.driverIndex],
-					"url":    c.urlInput.Value(),
-					"name":   c.nameInput.Value(),
+					"name":   fields.nameInput.Value(),
+					"host":   fields.hostInput.Value(),
+					"port":   fields.portInput.Value(),
 				})
 				c.result = modal.ResultSubmit
 				c.closed = true
@@ -168,38 +274,89 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 	return c, nil
 }
 
+// handleInputUpdate routes key input to the appropriate text input field
+func (cf *ConnectionFields) handleInputUpdate(msg tea.KeyMsg, focusField FocusField) {
+	switch focusField {
+	case FocusHostInput:
+		cf.hostInput, _ = cf.hostInput.Update(msg)
+	case FocusPortInput:
+		cf.portInput, _ = cf.portInput.Update(msg)
+	case FocusUsernameInput:
+		cf.usernameInput, _ = cf.usernameInput.Update(msg)
+	case FocusPasswordInput:
+		cf.passwordInput, _ = cf.passwordInput.Update(msg)
+	case FocusDatabaseInput:
+		cf.databaseInput, _ = cf.databaseInput.Update(msg)
+	}
+}
+
 func (c *Content) updateFocus() {
-	// Handle name input focus
+	fields := c.getCurrentFields()
+
+	// Focus management for all fields
 	if c.focusField == FocusNameInput {
-		c.nameInput.Focus()
+		fields.nameInput.Focus()
 	} else {
-		c.nameInput.Blur()
+		fields.nameInput.Blur()
 	}
 
-	// Handle URL input focus
-	if c.focusField == FocusUrlInput {
-		c.urlInput.Focus()
+	if c.focusField == FocusHostInput {
+		fields.hostInput.Focus()
 	} else {
-		c.urlInput.Blur()
+		fields.hostInput.Blur()
+	}
+
+	if c.focusField == FocusPortInput {
+		fields.portInput.Focus()
+	} else {
+		fields.portInput.Blur()
+	}
+
+	if c.focusField == FocusUsernameInput {
+		fields.usernameInput.Focus()
+	} else {
+		fields.usernameInput.Blur()
+	}
+
+	if c.focusField == FocusPasswordInput {
+		fields.passwordInput.Focus()
+	} else {
+		fields.passwordInput.Blur()
+	}
+
+	if c.focusField == FocusDatabaseInput {
+		fields.databaseInput.Focus()
+	} else {
+		fields.databaseInput.Blur()
 	}
 }
 
 func (c *Content) View() string {
 	t := theme.Current
+	fields := c.getCurrentFields()
 
 	labelStyle := lipgloss.NewStyle().
 		Foreground(t.Colors.Foreground).
 		Bold(true).
 		Width(10)
 
-	focusedStyle := lipgloss.NewStyle().
-		Foreground(t.Colors.Foreground).
-		Background(t.Colors.Primary).
-		Padding(0, 1)
+	// Calculate input width based on modal content width
+	// Keep inputs compact for smaller modal
+	inputWidth := 40
 
-	unfocusedStyle := lipgloss.NewStyle().
+	focusedInputStyle := lipgloss.NewStyle().
+		Foreground(t.Colors.Foreground).
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(t.Colors.Primary).
+		Padding(0, 1).
+		Height(1)
+
+	unfocusedInputStyle := lipgloss.NewStyle().
 		Foreground(t.Colors.ForegroundDim).
-		Padding(0, 1)
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(t.Colors.SelectionBg).
+		Padding(0, 1).
+		Height(1)
 
 	activeButtonStyle := lipgloss.NewStyle().
 		Foreground(t.Colors.Foreground).
@@ -212,42 +369,54 @@ func (c *Content) View() string {
 		Background(t.Colors.SelectionBg).
 		Padding(0, 2)
 
-	nameLabel := labelStyle.Render("Name:")
-	var nameDisplay string
-	if c.focusField == FocusNameInput {
-		c.nameInput.TextStyle = lipgloss.NewStyle().Foreground(t.Colors.Foreground)
-		c.nameInput.PromptStyle = lipgloss.NewStyle().Foreground(t.Colors.Primary)
+	// Driver select field
+	var driverSelect string
+	if c.focusField == FocusDriverSelect {
+		driverSelect = focusedInputStyle.Width(inputWidth).Render(fmt.Sprintf("[%s ▼]", c.drivers[c.driverIndex]))
 	} else {
-		c.nameInput.TextStyle = lipgloss.NewStyle().Foreground(t.Colors.ForegroundDim)
-		c.nameInput.PromptStyle = lipgloss.NewStyle().Foreground(t.Colors.ForegroundDim)
-	}
-	nameDisplay = c.nameInput.View()
-	nameRow := lipgloss.JoinHorizontal(lipgloss.Center, nameLabel, nameDisplay)
-
-	// Driver selector
-	var driverDisplay string
-	if c.focusField == FocusDriverInput {
-		driverDisplay = focusedStyle.Render("< " + c.drivers[c.driverIndex] + " >")
-	} else {
-		driverDisplay = unfocusedStyle.Render("  " + c.drivers[c.driverIndex] + "  ")
+		driverSelect = unfocusedInputStyle.Width(inputWidth).Render(fmt.Sprintf(" %s  ", c.drivers[c.driverIndex]))
 	}
 	driverRow := lipgloss.JoinHorizontal(lipgloss.Center,
 		labelStyle.Render("Driver:"),
-		driverDisplay,
+		"  ",
+		driverSelect,
 	)
 
-	// URL input
-	urlLabel := labelStyle.Render("URL:")
-	var urlDisplay string
-	if c.focusField == FocusUrlInput {
-		c.urlInput.TextStyle = lipgloss.NewStyle().Foreground(t.Colors.Foreground)
-		c.urlInput.PromptStyle = lipgloss.NewStyle().Foreground(t.Colors.Primary)
-	} else {
-		c.urlInput.TextStyle = lipgloss.NewStyle().Foreground(t.Colors.ForegroundDim)
-		c.urlInput.PromptStyle = lipgloss.NewStyle().Foreground(t.Colors.ForegroundDim)
+	// Helper function to render input field
+	renderField := func(label string, input textinput.Model, focused bool) string {
+		if focused {
+			input.TextStyle = lipgloss.NewStyle().Foreground(t.Colors.Foreground)
+			input.PromptStyle = lipgloss.NewStyle().Foreground(t.Colors.Primary)
+		} else {
+			input.TextStyle = lipgloss.NewStyle().Foreground(t.Colors.ForegroundDim)
+			input.PromptStyle = lipgloss.NewStyle().Foreground(t.Colors.ForegroundDim)
+		}
+
+		inputView := input.View()
+
+		var inputStyle lipgloss.Style
+		if focused {
+			inputStyle = focusedInputStyle
+		} else {
+			inputStyle = unfocusedInputStyle
+		}
+
+		inputContainer := inputStyle.Width(inputWidth).Render(inputView)
+
+		return lipgloss.JoinHorizontal(lipgloss.Center,
+			labelStyle.Render(label+":"),
+			"  ",
+			inputContainer,
+		)
 	}
-	urlDisplay = c.urlInput.View()
-	urlRow := lipgloss.JoinHorizontal(lipgloss.Center, urlLabel, urlDisplay)
+
+	// Render form fields
+	nameRow := renderField("Name", fields.nameInput, c.focusField == FocusNameInput)
+	hostRow := renderField("Host", fields.hostInput, c.focusField == FocusHostInput)
+	portRow := renderField("Port", fields.portInput, c.focusField == FocusPortInput)
+	usernameRow := renderField("Username", fields.usernameInput, c.focusField == FocusUsernameInput)
+	passwordRow := renderField("Password", fields.passwordInput, c.focusField == FocusPasswordInput)
+	databaseRow := renderField("Database", fields.databaseInput, c.focusField == FocusDatabaseInput)
 
 	// Buttons
 	var submitButton, cancelButton string
@@ -263,26 +432,26 @@ func (c *Content) View() string {
 	}
 
 	buttonRow := lipgloss.JoinHorizontal(lipgloss.Center, submitButton, "   ", cancelButton)
-	buttonRowCentered := lipgloss.NewStyle().Width(50).Align(lipgloss.Center).Render(buttonRow)
 
 	helpStyle := lipgloss.NewStyle().
 		Foreground(t.Colors.ForegroundDim).
 		Align(lipgloss.Center).
 		Padding(1, 0, 0, 0)
-	help := helpStyle.Render("Tab/↑↓: navigate | ←→: select | Enter: confirm | Esc: cancel")
+	help := helpStyle.Render("Tab/↑↓: navigate | k/j: select driver | Enter: confirm | Esc: cancel")
 
 	contentStyle := lipgloss.NewStyle().
-		Padding(1, 0)
+		Padding(0, 0)
 
 	return contentStyle.Render(lipgloss.JoinVertical(
 		lipgloss.Left,
-		nameRow,
-		"",
 		driverRow,
-		"",
-		urlRow,
-		"",
-		buttonRowCentered,
+		nameRow,
+		hostRow,
+		portRow,
+		usernameRow,
+		passwordRow,
+		databaseRow,
+		buttonRow,
 		help,
 	))
 }
@@ -297,8 +466,17 @@ func (c *Content) ShouldClose() bool {
 
 func (c *Content) SetWidth(width int) {
 	c.width = width
-	if width > 20 {
-		c.urlInput.Width = width - 15
+	// Keep inputs compact
+	inputWidth := 35
+
+	// Update both driver field sets
+	for _, fields := range []*ConnectionFields{&c.mysqlFields, &c.postgresFields} {
+		fields.nameInput.Width = inputWidth
+		fields.hostInput.Width = inputWidth
+		fields.portInput.Width = inputWidth
+		fields.usernameInput.Width = inputWidth
+		fields.passwordInput.Width = inputWidth
+		fields.databaseInput.Width = inputWidth
 	}
 }
 
@@ -307,25 +485,69 @@ func (c *Content) GetDriver() string {
 	return c.drivers[c.driverIndex]
 }
 
-// GetURL returns the entered URL
-func (c *Content) GetURL() string {
-	return c.urlInput.Value()
+// BuildConnectionString builds the connection URL from the fields
+func (c *Content) BuildConnectionString() string {
+	fields := c.getCurrentFields()
+	driver := c.GetDriver()
+
+	host := fields.hostInput.Value()
+	if host == "" {
+		host = "localhost"
+	}
+
+	port := fields.portInput.Value()
+	if port == "" {
+		port = c.getDefaultPort()
+	}
+
+	username := fields.usernameInput.Value()
+	password := fields.passwordInput.Value()
+	database := fields.databaseInput.Value()
+
+	if driver == drivers.DriverMySQL {
+		// MySQL DSN format: user:password@tcp(host:port)/database
+		if password != "" {
+			return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", username, password, host, port, database)
+		}
+		return fmt.Sprintf("%s@tcp(%s:%s)/%s", username, host, port, database)
+	} else if driver == drivers.DriverPostgreSQL {
+		// PostgreSQL connection string format
+		connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+			host, port, username, password, database)
+		return connStr
+	}
+
+	return ""
 }
 
 func (c *Content) GetName() string {
-	return c.nameInput.Value()
+	fields := c.getCurrentFields()
+	return fields.nameInput.Value()
 }
 
 // Reset resets the content to initial state
 func (c *Content) Reset() {
 	c.driverIndex = 0
-	c.nameInput.SetValue("")
-	c.urlInput.SetValue("")
-	c.focusField = FocusNameInput
+	c.focusField = FocusDriverSelect
 	c.result = modal.ResultNone
 	c.closed = false
-	c.nameInput.Focus()
-	c.urlInput.Blur()
+
+	// Reset both driver field sets but keep defaults
+	c.mysqlFields.nameInput.SetValue("")
+	c.mysqlFields.hostInput.SetValue("localhost")
+	c.mysqlFields.portInput.SetValue("3306")
+	c.mysqlFields.usernameInput.SetValue("root")
+	c.mysqlFields.passwordInput.SetValue("")
+	c.mysqlFields.databaseInput.SetValue("")
+
+	c.postgresFields.nameInput.SetValue("")
+	c.postgresFields.hostInput.SetValue("localhost")
+	c.postgresFields.portInput.SetValue("5432")
+	c.postgresFields.usernameInput.SetValue("postgres")
+	c.postgresFields.passwordInput.SetValue("")
+	c.postgresFields.databaseInput.SetValue("")
+
+	c.getCurrentFields().nameInput.Focus()
 }
 
 // Model wraps the generic modal with create connection content
@@ -364,6 +586,8 @@ func (m *Model) Visible() bool {
 // SetSize sets the terminal size for centering
 func (m *Model) SetSize(width, height int) {
 	m.modal.SetSize(width, height)
+	// Set a fixed smaller width for the content
+	m.content.SetWidth(60)
 }
 
 // Update handles input
@@ -388,12 +612,12 @@ func (m Model) GetDriver() string {
 	return m.content.GetDriver()
 }
 
-// GetURL returns the entered URL
-func (m Model) GetURL() string {
-	return m.content.GetURL()
+// GetConnectionString returns the built connection string
+func (m Model) GetConnectionString() string {
+	return m.content.BuildConnectionString()
 }
 
-// GetURL returns the entered URL
+// GetName returns the entered connection name
 func (m Model) GetName() string {
 	return m.content.GetName()
 }
