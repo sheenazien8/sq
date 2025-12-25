@@ -4,7 +4,7 @@ A keyboard-first SQL TUI built for VIM users [Bubble Tea](https://github.com/cha
 It focuses on speed, clarity, and terminal-native workflows—no mouse,
 no clutter, just efficient querying inside terminal but with the beautifull UI
 
-**Status**: Active development - MySQL support available.
+**Status**: Active development - MySQL support available with full CRUD operations, foreign key navigation, pagination, and SQL query editor.
 
 ## Demo
 
@@ -39,13 +39,19 @@ go run .
 - Multi-pane layout with sidebar (connections/tables), tabbed table views, and filter dialog
 - MySQL database connection support
 - **Query Editor** with vim-mode support for writing and executing custom SQL queries
+  - SQL syntax highlighting
+  - SQL formatting with `Ctrl+F`
+  - Multi-line query support
 - Tabbed interface for multiple tables/queries
 - Table structure viewer (columns, indexes, relations, triggers)
+- **Foreign Key Navigation** - Jump to related tables with `gd` (goto definition)
+- **Pagination** - Efficient handling of large datasets with configurable page sizes
 - Vim-like keyboard navigation throughout
 - Theme switching (default, dracula, nord, gruvbox, tokyo-night, catppuccin, monokai)
 - Cell preview and yank (copy) functionality
 - Filter dialogs for advanced querying with multiple filter support
 - Collapsible sidebar
+- Built-in help modal with `?` key
 
 ### Planned Features
 - PostgreSQL and SQLite support
@@ -58,6 +64,7 @@ go run .
 ### Global Shortcuts
 | Key | Action |
 |-----|--------|
+| `?` | Show help modal |
 | `q` / `Ctrl+C` | Show exit modal |
 | `Tab` | Switch focus between sidebar and main area |
 | `T` | Cycle themes |
@@ -91,6 +98,8 @@ go run .
 | `l` / `→` | Scroll columns right |
 | `H` | Jump to first column |
 | `L` | Jump to last column |
+| `J` | Next page (pagination) |
+| `K` | Previous page (pagination) |
 | `PgUp` / `PgDn` | Page up/down |
 | `Home` / `End` | Jump to first/last row |
 | `y` | Yank (copy) selected cell content to clipboard |
@@ -99,6 +108,7 @@ go run .
 | `C` | Clear all filters |
 | `d` | View table structure |
 | `e` | Open Query Editor |
+| `gd` | Go to definition (navigate to foreign key table) |
 
 ### Table Structure View
 | Key | Action |
@@ -153,6 +163,8 @@ The query editor features full **vim-mode** support for efficient editing.
 |-----|--------|
 | `F5` / `Ctrl+E` | Execute query |
 | `Ctrl+R` | Toggle focus between editor and results |
+| `Ctrl+F` | Format SQL query |
+| `Ctrl+Y` | Copy entire query to clipboard |
 
 #### Results Table (when focused)
 | Key | Action |
@@ -196,8 +208,8 @@ sq/
 │   └── config.go        # Config loading/saving (~/.config/db-client-tui/config.json)
 ├── drivers/             # Database drivers
 │   ├── driver.go        # Driver interface definition
-│   ├── mysql.go         # MySQL driver implementation
-│   └── types.go         # Shared types (TableStructure, ColumnInfo, etc.)
+│   ├── mysql.go         # MySQL driver implementation (with pagination support)
+│   └── types.go         # Shared types (TableStructure, ColumnInfo, Pagination, etc.)
 ├── logger/              # Logging utilities
 ├── storage/             # Connection storage utilities
 ├── ui/                  # UI components (separate Bubble Tea models)
@@ -205,11 +217,13 @@ sq/
 │   ├── table/           # Scrollable table widget
 │   ├── tab/             # Tabbed interface for multiple views
 │   ├── filter/          # Filter input component
-│   ├── query-editor/    # SQL query editor with vim-mode
+│   ├── query-editor/    # SQL query editor with vim-mode and formatter
+│   ├── syntax-editor/   # Syntax highlighting text editor component
 │   ├── modal/           # Base modal component
 │   ├── modal-exit/      # Exit confirmation modal
 │   ├── modal-cell-preview/  # Cell content preview modal
 │   ├── modal-create-connection/  # New connection modal
+│   ├── modal-help/      # Help modal with all keybindings
 │   ├── theme/           # Theme system and color definitions
 │   ├── main/            # (future) Main record view
 │   └── detail/          # (future) Detail pane
@@ -246,10 +260,12 @@ Connections are stored in `~/.config/sq/connections.json`.
 
 ### Supported Databases
 - **MySQL** - Full support including:
-  - Table browsing and data viewing
+  - Table browsing and data viewing with pagination
   - Table structure (columns, indexes, relations, triggers)
-  - Custom SQL query execution
+  - Foreign key navigation (goto definition)
+  - Custom SQL query execution with syntax highlighting and formatting
   - Filtering with multiple conditions
+  - Connection persistence
 
 ### Connection URL Format
 

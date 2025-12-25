@@ -23,6 +23,7 @@ type Tab struct {
 	Columns      []table.Column // Column definitions
 	ColumnNames  []string       // Column names for filtering
 	ActiveFilter *filter.Filter // Single active filter for this tab
+	FilterUI     filter.Model   // Filter UI component for table tabs
 }
 
 // TabType represents the type of content in a tab
@@ -38,6 +39,11 @@ const (
 type TabSwitchedMsg struct {
 	TabIndex int
 	TabName  string
+}
+
+// FilterAppliedMsg is sent when a filter is applied in a table tab
+type FilterAppliedMsg struct {
+	TabIndex int
 }
 
 // StructureSection represents which section of structure is active
@@ -425,12 +431,15 @@ func (m *Model) SetSize(width, height int) {
 		switch m.tabs[i].Type {
 		case TabTypeTable:
 			if table, ok := m.tabs[i].Content.(table.Model); ok {
-				table.SetSize(width, height-1)
+				// For table tabs: tab bar (1) + filter (3) + table = total height
+				table.SetSize(width, height-1-3)
 				m.tabs[i].Content = table
 			}
+			// Set filter width for table tabs
+			m.tabs[i].FilterUI.SetWidth(width)
 		case TabTypeStructure:
 			if sv, ok := m.tabs[i].Content.(StructureView); ok {
-				sv.SetSize(width, height-1)
+				sv.SetSize(width, height+2)
 				m.tabs[i].Content = sv
 			}
 		case TabTypeQuery:
@@ -452,6 +461,10 @@ func (m *Model) SetFocused(focused bool) {
 				table.SetFocused(focused)
 				m.tabs[m.activeTab].Content = table
 			}
+			// Blur filter if tab is not focused
+			if !focused {
+				m.tabs[m.activeTab].FilterUI.Blur()
+			}
 		case TabTypeStructure:
 			if sv, ok := m.tabs[m.activeTab].Content.(StructureView); ok {
 				sv.SetFocused(focused)
@@ -462,6 +475,35 @@ func (m *Model) SetFocused(focused bool) {
 				qe.SetFocused(focused)
 				m.tabs[m.activeTab].Content = qe
 			}
+		}
+	}
+}
+
+// FocusFilter focuses the filter input for the active table tab
+func (m *Model) FocusFilter() {
+	if m.activeTab >= 0 && m.activeTab < len(m.tabs) && m.tabs[m.activeTab].Type == TabTypeTable {
+		// Set filter text from active filter if exists
+		if activeFilter := m.tabs[m.activeTab].ActiveFilter; activeFilter != nil {
+			m.tabs[m.activeTab].FilterUI.SetText(activeFilter.WhereClause)
+		}
+		// Blur table
+		if table, ok := m.tabs[m.activeTab].Content.(table.Model); ok {
+			table.SetFocused(false)
+			m.tabs[m.activeTab].Content = table
+		}
+		// Focus filter
+		m.tabs[m.activeTab].FilterUI.Focus()
+	}
+}
+
+// BlurFilter blurs the filter input for the active table tab
+func (m *Model) BlurFilter() {
+	if m.activeTab >= 0 && m.activeTab < len(m.tabs) && m.tabs[m.activeTab].Type == TabTypeTable {
+		m.tabs[m.activeTab].FilterUI.Blur()
+		// Focus table
+		if table, ok := m.tabs[m.activeTab].Content.(table.Model); ok {
+			table.SetFocused(true)
+			m.tabs[m.activeTab].Content = table
 		}
 	}
 }
@@ -557,6 +599,7 @@ func (m *Model) SetActiveTabFilter(f *filter.Filter) {
 func (m *Model) AddActiveTabFilter(f filter.Filter) {
 	if m.activeTab >= 0 && m.activeTab < len(m.tabs) {
 		m.tabs[m.activeTab].ActiveFilter = &f
+        m.tabs[m.activeTab].FilterUI.SetActive(true)
 	}
 }
 
@@ -571,6 +614,7 @@ func (m *Model) RemoveActiveTabFilter(index int) {
 func (m *Model) ClearActiveTabFilters() {
 	if m.activeTab >= 0 && m.activeTab < len(m.tabs) {
 		m.tabs[m.activeTab].ActiveFilter = nil
+        m.tabs[m.activeTab].FilterUI.Clear()
 	}
 }
 
@@ -599,6 +643,9 @@ func (m *Model) AddTableTab(name string, columns []table.Column, rows []table.Ro
 		columnNames[i] = col.Title
 	}
 
+	// Initialize filter UI for table tabs
+	filterUI := filter.New(columnNames)
+
 	newTab := Tab{
 		Name:        name,
 		Content:     newTable,
@@ -607,6 +654,7 @@ func (m *Model) AddTableTab(name string, columns []table.Column, rows []table.Ro
 		AllRows:     rows,
 		Columns:     columns,
 		ColumnNames: columnNames,
+		FilterUI:    filterUI,
 	}
 
 	m.addTab(newTab)
@@ -882,11 +930,30 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		default:
 			switch m.tabs[m.activeTab].Type {
 			case TabTypeTable:
-				if tbl, ok := m.tabs[m.activeTab].Content.(table.Model); ok {
+				// For table tabs, check if filter is focused
+				if m.tabs[m.activeTab].FilterUI.Focused() {
+					prevFilter := m.tabs[m.activeTab].FilterUI.GetFilter()
 					var cmd tea.Cmd
-					tbl, cmd = tbl.Update(msg)
-					m.tabs[m.activeTab].Content = tbl
+					m.tabs[m.activeTab].FilterUI, cmd = m.tabs[m.activeTab].FilterUI.Update(msg)
+					currentFilter := m.tabs[m.activeTab].FilterUI.GetFilter()
+					// Update active filter
+					m.tabs[m.activeTab].ActiveFilter = currentFilter
+					// If filter was applied or cleared, emit message
+					if (prevFilter == nil && currentFilter != nil) || (prevFilter != nil && currentFilter == nil) ||
+						(prevFilter != nil && currentFilter != nil && prevFilter.WhereClause != currentFilter.WhereClause) {
+						filterCmd := func() tea.Msg {
+							return FilterAppliedMsg{TabIndex: m.activeTab}
+						}
+						return m, tea.Batch(cmd, filterCmd)
+					}
 					return m, cmd
+				} else {
+					if tbl, ok := m.tabs[m.activeTab].Content.(table.Model); ok {
+						var cmd tea.Cmd
+						tbl, cmd = tbl.Update(msg)
+						m.tabs[m.activeTab].Content = tbl
+						return m, cmd
+					}
 				}
 			case TabTypeStructure:
 				if sv, ok := m.tabs[m.activeTab].Content.(StructureView); ok {
@@ -976,7 +1043,9 @@ func (m Model) View() string {
 		switch m.tabs[m.activeTab].Type {
 		case TabTypeTable:
 			if tbl, ok := m.tabs[m.activeTab].Content.(table.Model); ok {
-				contentView = tbl.View()
+				filterView := m.tabs[m.activeTab].FilterUI.View()
+				tableView := tbl.View()
+				contentView = lipgloss.JoinVertical(lipgloss.Left, filterView, tableView)
 			}
 		case TabTypeStructure:
 			if sv, ok := m.tabs[m.activeTab].Content.(StructureView); ok {

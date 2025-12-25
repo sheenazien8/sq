@@ -3,11 +3,10 @@ package app
 import (
 	"github.com/sheenazien8/sq/config"
 	"github.com/sheenazien8/sq/drivers"
-	"github.com/sheenazien8/sq/ui/filter"
-	modalcellpreview "github.com/sheenazien8/sq/ui/modal-cell-preview"
-	modalcreateconnection "github.com/sheenazien8/sq/ui/modal-create-connection"
-	modalexit "github.com/sheenazien8/sq/ui/modal-exit"
-	modalhelp "github.com/sheenazien8/sq/ui/modal-help"
+	"github.com/sheenazien8/sq/ui/modal-cell-preview"
+	"github.com/sheenazien8/sq/ui/modal-create-connection"
+	"github.com/sheenazien8/sq/ui/modal-exit"
+	"github.com/sheenazien8/sq/ui/modal-help"
 	"github.com/sheenazien8/sq/ui/sidebar"
 	"github.com/sheenazien8/sq/ui/tab"
 	"github.com/sheenazien8/sq/ui/table"
@@ -35,7 +34,6 @@ type Model struct {
 	Sidebar               sidebar.Model
 	Main                  table.Model
 	Tabs                  tab.Model
-	Filter                filter.Model
 	ExitModal             modalexit.Model
 	CreateConnectionModal modalcreateconnection.Model
 	CellPreviewModal      modalcellpreview.Model

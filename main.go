@@ -17,7 +17,13 @@ func main() {
 		fmt.Println("Failed to setup logger:", err)
 		os.Exit(1)
 	}
-	logger.SetLevel(slog.LevelDebug)
+
+	// Set log level based on DEBUG environment variable
+	if os.Getenv("DEBUG") == "true" {
+		logger.SetLevel(slog.LevelDebug)
+	} else {
+		logger.SetLevel(slog.LevelInfo)
+	}
 	logger.Info("Application started", nil)
 
 	// Initialize app storage (SQLite database)
