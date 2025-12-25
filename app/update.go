@@ -342,7 +342,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.CreateConnectionModal.Result() == modal.ResultSubmit {
 					name := m.CreateConnectionModal.GetName()
 					driver := m.CreateConnectionModal.GetDriver()
-					url := m.CreateConnectionModal.GetURL()
+					url := m.CreateConnectionModal.GetConnectionString()
 					_, err := storage.CreateConnection(
 						name,
 						driver,

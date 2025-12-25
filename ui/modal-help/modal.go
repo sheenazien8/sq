@@ -88,8 +88,9 @@ func NewHelpContent() *HelpContent {
 				},
 			},
 			{
-				Title: "Query Editor (Normal)",
+				Title: "Query Editor",
 				Keymaps: []Keymap{
+					{"", "─── Normal Mode ───"},
 					{"i", "Enter insert mode"},
 					{"a", "Append after cursor"},
 					{"I", "Insert at line start"},
@@ -110,30 +111,22 @@ func NewHelpContent() *HelpContent {
 					{"p", "Paste"},
 					{"u", "Undo"},
 					{"v", "Visual mode"},
-					{"F5 / Ctrl+E", "Execute query"},
-					{"Ctrl+F", "Format SQL"},
-					{"Ctrl+Y", "Copy query to clipboard"},
-					{"Ctrl+R", "Toggle results focus"},
-				},
-			},
-			{
-				Title: "Query Editor (Insert)",
-				Keymaps: []Keymap{
+					{"", ""},
+					{"", "─── Insert Mode ───"},
 					{"Esc", "Return to normal mode"},
-					{"F5 / Ctrl+E", "Execute query"},
-					{"Ctrl+F", "Format SQL"},
-					{"Ctrl+Y", "Copy query to clipboard"},
-				},
-			},
-			{
-				Title: "Query Editor (Visual)",
-				Keymaps: []Keymap{
+					{"", ""},
+					{"", "─── Visual Mode ───"},
 					{"Esc", "Return to normal mode"},
 					{"h/j/k/l", "Extend selection"},
 					{"d", "Delete selection"},
 					{"y", "Yank selection"},
 					{"c", "Change selection"},
-					{"u", "Undo"},
+					{"", ""},
+					{"", "─── All Modes ───"},
+					{"F5 / Ctrl+E", "Execute query"},
+					{"Ctrl+F", "Format SQL"},
+					{"Ctrl+Y", "Copy query to clipboard"},
+					{"Ctrl+R", "Toggle results focus"},
 				},
 			},
 			{
@@ -222,16 +215,6 @@ func (c *HelpContent) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 		case "6":
 			if len(c.sections) > 5 {
 				c.activeSection = 5
-				c.scrollOffset = 0
-			}
-		case "7":
-			if len(c.sections) > 6 {
-				c.activeSection = 6
-				c.scrollOffset = 0
-			}
-		case "8":
-			if len(c.sections) > 7 {
-				c.activeSection = 7
 				c.scrollOffset = 0
 			}
 		}

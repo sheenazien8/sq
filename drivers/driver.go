@@ -1,7 +1,8 @@
 package drivers
 
 const (
-	DriverMySQL string = "mysql"
+	DriverMySQL      string = "mysql"
+	DriverPostgreSQL string = "postgresql"
 )
 
 // Pagination represents pagination parameters
