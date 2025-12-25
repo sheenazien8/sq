@@ -2,6 +2,7 @@ package modalcreateconnection
 
 import (
 	"fmt"
+	"strconv"
 
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
@@ -46,6 +47,7 @@ type Content struct {
 	width          int
 	mysqlFields    ConnectionFields
 	postgresFields ConnectionFields
+	errorMsg       string
 }
 
 // NewContent creates a new create connection content
@@ -114,6 +116,49 @@ func (c *Content) getCurrentFields() *ConnectionFields {
 		return &c.mysqlFields
 	}
 	return &c.postgresFields
+}
+
+// createDriver creates a driver instance for the current driver
+func (c *Content) createDriver() (drivers.Driver, error) {
+	switch c.GetDriver() {
+	case drivers.DriverMySQL:
+		return &drivers.MySQL{}, nil
+	case drivers.DriverPostgreSQL:
+		return nil, fmt.Errorf("PostgreSQL support is not yet implemented")
+	default:
+		return nil, fmt.Errorf("unsupported driver: %s", c.GetDriver())
+	}
+}
+
+// validate checks if the connection fields are valid
+func (c *Content) validate() string {
+	fields := c.getCurrentFields()
+
+	if name := fields.nameInput.Value(); name == "" {
+		return "Connection name is required"
+	}
+
+	if host := fields.hostInput.Value(); host == "" {
+		return "Host is required"
+	}
+
+	if portStr := fields.portInput.Value(); portStr == "" {
+		return "Port is required"
+	} else if port, err := strconv.Atoi(portStr); err != nil {
+		return "Port must be a valid number"
+	} else if port < 1 || port > 65535 {
+		return "Port must be between 1 and 65535"
+	}
+
+	if username := fields.usernameInput.Value(); username == "" {
+		return "Username is required"
+	}
+
+	if database := fields.databaseInput.Value(); database == "" {
+		return "Database name is required"
+	}
+
+	return ""
 }
 
 // getDefaultPort returns the default port for the current driver
@@ -255,6 +300,25 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 
 		case "enter":
 			if c.focusField == FocusSubmitButton {
+				if errMsg := c.validate(); errMsg != "" {
+					c.errorMsg = errMsg
+					return c, nil
+				}
+				c.errorMsg = "" // Clear any previous error
+
+				// Create driver and test connection
+				driver, err := c.createDriver()
+				if err != nil {
+					c.errorMsg = err.Error()
+					return c, nil
+				}
+
+				connStr := c.BuildConnectionString()
+				if err := driver.TestConnection(connStr); err != nil {
+					c.errorMsg = "Connection failed: " + err.Error()
+					return c, nil
+				}
+
 				logger.Info("Connection submitted", map[string]any{
 					"driver": c.drivers[c.driverIndex],
 					"name":   fields.nameInput.Value(),
@@ -264,6 +328,7 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 				c.result = modal.ResultSubmit
 				c.closed = true
 			} else if c.focusField == FocusCancelButton {
+				c.errorMsg = "" // Clear error on cancel
 				logger.Debug("Create connection cancelled", nil)
 				c.result = modal.ResultCancel
 				c.closed = true
@@ -418,6 +483,16 @@ func (c *Content) View() string {
 	passwordRow := renderField("Password", fields.passwordInput, c.focusField == FocusPasswordInput)
 	databaseRow := renderField("Database", fields.databaseInput, c.focusField == FocusDatabaseInput)
 
+	// Error message
+	var errorRow string
+	if c.errorMsg != "" {
+		errorStyle := lipgloss.NewStyle().
+			Foreground(t.Colors.Primary).
+			Align(lipgloss.Center).
+			Padding(0, 0, 1, 0)
+		errorRow = errorStyle.Render("Error: " + c.errorMsg)
+	}
+
 	// Buttons
 	var submitButton, cancelButton string
 	if c.focusField == FocusSubmitButton {
@@ -437,13 +512,12 @@ func (c *Content) View() string {
 		Foreground(t.Colors.ForegroundDim).
 		Align(lipgloss.Center).
 		Padding(1, 0, 0, 0)
-	help := helpStyle.Render("Tab/↑↓: navigate | k/j: select driver | Enter: confirm | Esc: cancel")
+	help := helpStyle.Render("Tab/↑↓: navigate | k/j: select driver | Enter: test connection | Esc: cancel")
 
 	contentStyle := lipgloss.NewStyle().
 		Padding(0, 0)
 
-	return contentStyle.Render(lipgloss.JoinVertical(
-		lipgloss.Left,
+	content := []string{
 		driverRow,
 		nameRow,
 		hostRow,
@@ -451,8 +525,15 @@ func (c *Content) View() string {
 		usernameRow,
 		passwordRow,
 		databaseRow,
-		buttonRow,
-		help,
+	}
+	if errorRow != "" {
+		content = append(content, errorRow)
+	}
+	content = append(content, buttonRow, help)
+
+	return contentStyle.Render(lipgloss.JoinVertical(
+		lipgloss.Left,
+		content...,
 	))
 }
 
@@ -505,11 +586,11 @@ func (c *Content) BuildConnectionString() string {
 	database := fields.databaseInput.Value()
 
 	if driver == drivers.DriverMySQL {
-		// MySQL DSN format: user:password@tcp(host:port)/database
+		// MySQL URL format: mysql://user:password@host:port/database
 		if password != "" {
-			return fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", username, password, host, port, database)
+			return fmt.Sprintf("mysql://%s:%s@%s:%s/%s", username, password, host, port, database)
 		}
-		return fmt.Sprintf("%s@tcp(%s:%s)/%s", username, host, port, database)
+		return fmt.Sprintf("mysql://%s@%s:%s/%s", username, host, port, database)
 	} else if driver == drivers.DriverPostgreSQL {
 		// PostgreSQL connection string format
 		connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
@@ -531,6 +612,7 @@ func (c *Content) Reset() {
 	c.focusField = FocusDriverSelect
 	c.result = modal.ResultNone
 	c.closed = false
+	c.errorMsg = ""
 
 	// Reset both driver field sets but keep defaults
 	c.mysqlFields.nameInput.SetValue("")
