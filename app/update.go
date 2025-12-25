@@ -10,6 +10,7 @@ import (
 	"github.com/sheenazien8/sq/drivers"
 	"github.com/sheenazien8/sq/logger"
 	"github.com/sheenazien8/sq/storage"
+
 	"github.com/sheenazien8/sq/ui/filter"
 	"github.com/sheenazien8/sq/ui/modal"
 	queryeditor "github.com/sheenazien8/sq/ui/query-editor"
@@ -92,8 +93,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tab.TabSwitchedMsg:
 		// Update filter UI to show the new tab's filter
-		m = m.updateFilterForActiveTab()
+
 		m = m.updateFooter()
+		return m, nil
+
+	case tab.FilterAppliedMsg:
+		// Apply the filter to reload table data
+		m = m.applyFilterToActiveTab()
 		return m, nil
 
 	case queryeditor.QueryExecuteMsg:
@@ -175,12 +181,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Initialize filter if not already done
-		if m.Filter.GetFilter() == nil && len(m.columnNames) == 0 {
-			m.Filter = filter.New(m.columnNames)
-			m.Filter.SetWidth(m.ContentWidth)
-		}
-
 		// Add tab with table data
 		tabName := msg.ConnectionName + "." + msg.TableName
 		m.Tabs.AddTableTab(tabName, m.columns, m.allRows)
@@ -201,7 +201,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Tabs.SetSize(tableWidth, tableHeight)
 
 		// Update filter UI to show the new tab's filter (which is empty for a new tab)
-		m = m.updateFilterForActiveTab()
 
 		// Switch focus to main area
 		m.Focus = FocusMain
@@ -210,6 +209,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m = m.updateFooter()
 
 		return m, nil
+
+    case filter.MapKeyMsg:
+        logger.Info("Map key filter fired", map[string]any{
+            "Key": msg.Key,
+        })
+        if msg.Key != "ctrl+c" {
+            m.Tabs.SetFocused(true)
+        }
 
 	case tea.WindowSizeMsg:
 		m.TerminalWidth = msg.Width
@@ -246,11 +253,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				"width":  msg.Width,
 				"height": msg.Height,
 			})
-			m.Filter = filter.New([]string{}) // Initialize with empty columns
 			m.initialized = true
-		}
 
-		m.Filter.SetWidth(contentWidth)
+		}
 		m.Tabs.SetSize(tableWidth, tableHeight)
 
 		m.Sidebar.SetSize(m.SidebarWidth, contentHeight)
@@ -278,44 +283,22 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 		}
 
-		// Always handle filter input
-		prevFilter := m.Filter.GetFilter()
-		prevActive := m.Filter.Active()
-		m.Filter, cmd = m.Filter.Update(msg)
-		cmds = append(cmds, cmd)
-
-		// Check if filter was applied (Enter pressed) by checking if filter changed
-		currentFilter := m.Filter.GetFilter()
-		if currentFilter != nil && (prevFilter == nil || prevFilter.WhereClause != currentFilter.WhereClause) {
-			m.Tabs.AddActiveTabFilter(*currentFilter)
-			m = m.applyFilterToActiveTab()
-		}
-
-		// Check if filter was cleared (Ctrl+C pressed)
-		if prevActive && !m.Filter.Active() {
-			m.Tabs.ClearActiveTabFilters()
-			m = m.applyFilterToActiveTab()
-		}
-
 		if m.Sidebar.IsFilterVisible() {
 			// Handle sidebar filter input
 			cmd := m.Sidebar.UpdateFilterInput(msg)
 			cmds = append(cmds, cmd)
 
-			// Check for exit keys
 			switch msg.String() {
 			case "enter":
-				// Apply filter and return to sidebar (keep filter active)
 				m.Sidebar.HideFilterInput()
 				m.Focus = FocusSidebar
 				m = m.updateFooter()
 			case "esc":
-				// Cancel filter and return to sidebar (clear filter)
+				m.Sidebar.HideFilterInput()
 				m.Sidebar.SetFilterVisible(false)
 				m.Focus = FocusSidebar
 				m = m.updateFooter()
 			case "ctrl+c":
-				// Clear filter
 				m.Sidebar.ClearFilterInput()
 			}
 			return m, tea.Batch(cmds...)
@@ -414,12 +397,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			case "]":
 				m.Tabs.NextTab()
-				m = m.updateFilterForActiveTab()
+
 				m = m.updateFooter()
 				return m, nil
 			case "[":
 				m.Tabs.PrevTab()
-				m = m.updateFilterForActiveTab()
+
 				m = m.updateFooter()
 				return m, nil
 			case "ctrl+w":
@@ -429,7 +412,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.Sidebar.SetFocused(true)
 					m.Tabs.SetFocused(false)
 				}
-				m = m.updateFilterForActiveTab()
+
 				m = m.updateFooter()
 				return m, nil
 			default:
@@ -440,9 +423,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// If filter is focused, don't process global shortcuts
-		if m.Filter.Focused() {
-			return m, nil
+		// If table tab filter is focused, pass directly to tabs without processing global shortcuts
+		if m.Focus == FocusMain && m.Tabs.HasTabs() && m.Tabs.GetActiveTabType() == tab.TabTypeTable {
+			if activeTab := m.Tabs.ActiveTab(); activeTab != nil && activeTab.FilterUI.Focused() {
+				m.Tabs, cmd = m.Tabs.Update(msg)
+				cmds = append(cmds, cmd)
+				return m, tea.Batch(cmds...)
+			}
 		}
 
 		switch msg.String() {
@@ -461,25 +448,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "/", "f":
-			if m.Focus == FocusMain && m.Tabs.HasTabs() {
-				// Get active tab's column names
-				_, _, columnNames := m.Tabs.GetActiveTabData()
-
-				if columnNames != nil {
-					// Create new filter with columns (if not already created or empty)
-					if !m.Filter.HasText() {
-						var filterText string
-						if activeFilter := m.Tabs.GetActiveTabFilter(); activeFilter != nil {
-							// Use the stored WHERE clause directly
-							filterText = activeFilter.WhereClause
-						}
-						m.Filter = filter.NewWithText(columnNames, filterText)
-						m.Filter.SetWidth(m.ContentWidth)
-					}
-					// Always focus the filter
-					m.Filter.Focus()
-					m = m.updateFooter()
-				}
+			if m.Focus == FocusMain && m.Tabs.HasTabs() && m.Tabs.GetActiveTabType() == tab.TabTypeTable {
+				// Focus the filter in the active table tab
+				m.Tabs.FocusFilter()
+				m = m.updateFooter()
 			} else if m.Focus == FocusSidebar {
 				// Toggle sidebar filter
 				if !m.Sidebar.IsFilterVisible() {
@@ -551,7 +523,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Clear table filters
 				m.Tabs.ClearActiveTabFilters()
 				m = m.applyFilterToActiveTab()
-				m = m.updateFilterForActiveTab()
+
 				m = m.updateTabSize()
 			}
 
@@ -605,7 +577,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					logger.Error("Failed to go to foreign key definition", map[string]any{"error": err.Error()})
 				} else {
 					// Update filter UI for the new tab
-					m = m.updateFilterForActiveTab()
+
 				}
 				return m, nil
 			}
@@ -620,7 +592,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					logger.Error("Failed to load table structure", map[string]any{"error": err.Error()})
 				} else {
 					// Update filter UI for the new tab (structure tabs have no filter)
-					m = m.updateFilterForActiveTab()
+
 				}
 				return m, nil
 			} else if m.Focus == FocusSidebar {
@@ -646,7 +618,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.Focus = FocusMain
 							m.Sidebar.SetFocused(false)
 							m.Tabs.SetFocused(true)
-							m = m.updateFilterForActiveTab()
+
 							m = m.updateFooter()
 						}
 						return m, nil
@@ -686,7 +658,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.Tabs.SetSize(tableWidth, tableHeight)
 
 					// Update filter UI for the new tab (query tabs have no filter)
-					m = m.updateFilterForActiveTab()
 
 					// Switch focus to main area
 					m.Focus = FocusMain
@@ -711,8 +682,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				contentWidth -= m.SidebarWidth
 			}
 			m.ContentWidth = contentWidth
-			m.Filter.SetWidth(contentWidth)
-			m.Tabs.SetSize(contentWidth-4, m.ContentHeight-3-2)
+			m.Tabs.SetSize(contentWidth-4, m.ContentHeight)
 			m = m.updateFooter()
 
 		default:
@@ -977,20 +947,6 @@ func (m Model) updateFooter() Model {
 	return m
 }
 
-// updateFilterForActiveTab updates the filter input to show the current tab's filter
-func (m Model) updateFilterForActiveTab() Model {
-	if !m.Tabs.HasTabs() {
-		m.Filter.SetFilter(nil)
-		return m
-	}
-
-	// Get the active tab's filter and set it on the filter UI
-	activeFilter := m.Tabs.GetActiveTabFilter()
-	m.Filter.SetFilter(activeFilter)
-
-	return m
-}
-
 // updateTabSize adjusts tab size based on filter visibility
 func (m Model) updateTabSize() Model {
 	tableWidth := m.ContentWidth - 4
@@ -1033,15 +989,6 @@ func (m Model) getFooterHelp() string {
 	default:
 		return "?: Help | q: Quit"
 	}
-}
-
-// getColumnNames extracts column names from columns
-func getColumnNames(columns []table.Column) []string {
-	names := make([]string, len(columns))
-	for i, col := range columns {
-		names[i] = col.Title
-	}
-	return names
 }
 
 // loadTableStructure loads the table structure and opens it in a new tab
@@ -1232,11 +1179,11 @@ func (m *Model) goToForeignKeyDefinition() error {
 	// Create new tab for referenced table
 	targetTabName := connectionName + "." + referencedTable
 	m.Tabs.AddTableTab(targetTabName, targetColumns, rows)
-
-	// Set the filter on the new tab so it shows in the filter bar
 	m.Tabs.AddActiveTabFilter(filter.Filter{
 		WhereClause: whereClause,
 	})
+    m.Tabs.FocusFilter()
+
 
 	tableWidth := m.ContentWidth - 4
 	tableHeight := m.ContentHeight - 3 - 2

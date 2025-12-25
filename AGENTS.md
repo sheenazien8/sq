@@ -4,13 +4,15 @@
 
 **sq** is a terminal-based database client built with the [Bubble Tea](https://github.com/charmbracelet/bubbletea) TUI framework for Go. The project implements a multi-pane layout with keyboard-driven navigation following vim-like patterns.
 
-**Status**: Early development - currently displays mock data. Planned support for PostgreSQL, MySQL, and SQLite.
+**Status**: Active development - MySQL support available with full CRUD operations, foreign key navigation, pagination, and SQL query editor.
 
 **Technology Stack**:
 - Go 1.22
 - Bubble Tea v0.25.0 (TUI framework)
 - Bubbles v0.17.1 (TUI components)
 - Lipgloss v0.9.1 (styling)
+- Chroma v2 (syntax highlighting)
+- sqlfmt (SQL formatting)
 
 ## Essential Commands
 
@@ -47,11 +49,24 @@ sq/
 │   └── view.go          # View() - renders the UI
 ├── config/              # Application configuration
 │   └── config.go        # Config loading/saving (~/.config/sq/config.json)
+├── drivers/             # Database drivers
+│   ├── driver.go        # Driver interface definition
+│   ├── mysql.go         # MySQL driver with pagination and foreign key support
+│   └── types.go         # Shared types (TableStructure, ColumnInfo, Pagination, etc.)
+├── logger/              # Logging utilities
+├── storage/             # Connection storage utilities
 └── ui/                  # UI components (separate Bubble Tea models)
-    ├── sidebar/         # Database list sidebar
-    ├── table/           # Scrollable table widget
+    ├── sidebar/         # Connection and table list sidebar
+    ├── table/           # Scrollable table widget with foreign key info
+    ├── tab/             # Tabbed interface for multiple views
     ├── filter/          # Filter input component
-    ├── modal/           # Modal dialogs (e.g., exit confirmation)
+    ├── query-editor/    # SQL query editor with vim-mode and formatter
+    ├── syntax-editor/   # Syntax highlighting text editor component
+    ├── modal/           # Base modal component
+    ├── modal-exit/      # Exit confirmation modal
+    ├── modal-cell-preview/  # Cell content preview modal
+    ├── modal-create-connection/  # New connection modal
+    ├── modal-help/      # Help modal with all keybindings
     ├── theme/           # Theme system and color definitions
     ├── main/            # (future) Main record view
     └── detail/          # (future) Detail pane
@@ -251,9 +266,11 @@ _ = cfg.Save()                     // Creates config dir if needed
 ## Keyboard Shortcuts
 
 ### Global
+- `?` - Show help modal
 - `q` / `Ctrl+C` - Show exit modal
 - `Tab` - Switch focus (Sidebar ↔ Main table)
 - `T` - Cycle themes
+- `s` / `S` - Toggle sidebar
 - `C` - Clear active filter
 
 ### Sidebar (when focused)
@@ -261,7 +278,10 @@ _ = cfg.Save()                     // Creates config dir if needed
 - `k` / `↑` - Move up
 - `Home` - Jump to first item
 - `End` - Jump to last item
-- `Enter` - Select database (marks as active)
+- `Enter` - Select/connect to database or open table
+- `e` - Open Query Editor (requires active connection)
+- `d` - View table structure
+- `n` - Create new connection
 
 ### Table (when focused)
 - `j` / `↓` - Move down one row
@@ -270,11 +290,16 @@ _ = cfg.Save()                     // Creates config dir if needed
 - `l` / `→` - Scroll columns right
 - `H` - Jump to first column
 - `L` - Jump to last column
+- `J` - Next page (pagination)
+- `K` - Previous page (pagination)
 - `PgUp` / `PgDn` - Page up/down
 - `Home` / `End` - Jump to first/last row
 - `y` - Yank (copy) selected cell content to clipboard
 - `p` - Preview selected cell content
 - `/` / `f` - Open filter dialog
+- `gd` - Go to definition (navigate to foreign key table)
+- `d` - View table structure
+- `e` - Open Query Editor
 
 ### Filter Dialog (when open)
 - `Tab` / `→` / `l` - Next field
@@ -518,24 +543,175 @@ func truncateOrPad(s string, width int) string {
 
 **Why**: Unicode characters (emoji, CJK) can have width != 1. Lipgloss handles this correctly.
 
+### Database Pagination Pattern
+
+Pagination is implemented at the database driver level for efficiency:
+```go
+// drivers/types.go
+type Pagination struct {
+    Page     int // Current page (1-indexed)
+    PageSize int // Items per page
+}
+
+type PaginatedResult struct {
+    Columns    []string
+    Rows       [][]string
+    Page       int
+    PageSize   int
+    TotalRows  int
+    TotalPages int
+}
+
+// drivers/driver.go
+GetTableDataPaginated(database, table string, pagination Pagination) (*PaginatedResult, error)
+GetTableDataWithFilterPaginated(database, table string, whereClause string, pagination Pagination) (*PaginatedResult, error)
+```
+
+**Usage Pattern**:
+```go
+// In app/update.go when loading table data
+pagination := drivers.Pagination{
+    Page:     1,
+    PageSize: 100,
+}
+result, err := driver.GetTableDataPaginated(dbName, tableName, pagination)
+
+// Update table with pagination info
+m.Tabs.SetActiveTabPagination(result.Page, result.PageSize, result.TotalRows, result.TotalPages)
+```
+
+**Navigation**:
+- `J` key increments page and re-queries
+- `K` key decrements page and re-queries
+- Pagination info shown in table footer: "Page 2/10 (100 rows/page)"
+
+### Foreign Key Navigation Pattern
+
+Foreign keys are detected and stored with column metadata:
+```go
+// drivers/types.go
+type ColumnInfo struct {
+    Name              string
+    Type              string
+    Nullable          string
+    Key               string
+    Default           string
+    Extra             string
+    ForeignKeyTable   string // Referenced table name (if FK)
+    ForeignKeyColumn  string // Referenced column name (if FK)
+}
+
+// table/table.go
+type Column struct {
+    Name             string
+    Width            int
+    ForeignKeyTable  string // For goto definition
+    ForeignKeyColumn string
+}
+```
+
+**Navigation Flow**:
+1. User positions cursor on column with foreign key
+2. User presses `g` then `d` (vim-style goto definition)
+3. App checks if current column has foreign key info
+4. If yes, creates new tab with referenced table
+5. New tab opens and loads data from referenced table
+
+**Implementation** (`app/update.go`):
+```go
+case "g":
+    m.gPressed = true  // Track first key in sequence
+case "d":
+    if m.gPressed {
+        // Check for foreign key and open referenced table
+        m.gPressed = false
+    }
+```
+
+### SQL Query Editor Pattern
+
+The query editor combines multiple components:
+```go
+// ui/query-editor/query_editor.go
+type Model struct {
+    syntaxEditor syntax_editor.Model  // Vim-mode editor with syntax highlighting
+    resultTable  table.Model          // Results display
+    vimMode      VimMode              // Normal/Insert mode tracking
+    // ...
+}
+```
+
+**Key Features**:
+1. **Vim Mode** - Full vim keybindings (hjkl, i/a/o, w/b, gg/G, etc.)
+2. **Syntax Highlighting** - Uses Chroma lexer for SQL
+3. **SQL Formatting** - Uses sqlfmt library (Ctrl+F)
+4. **Dual Panes** - Editor on top, results below
+5. **Focus Toggle** - Ctrl+R switches between editor and results
+
+**Message Flow**:
+```go
+// Execute query (F5 or Ctrl+E)
+1. Get query text from syntaxEditor
+2. Send QueryMsg with SQL text
+3. Driver executes query asynchronously
+4. Results return as TableDataMsg
+5. Update resultTable with data
+6. Switch focus to results pane
+
+// Format SQL (Ctrl+F)
+1. Get current query text
+2. Call sqlfmt.FmtSQL()
+3. Update syntaxEditor with formatted text
+4. Log error if formatting fails (don't change content)
+```
+
+### Help Modal Pattern
+
+Help content is organized by sections:
+```go
+// ui/modal-help/modal.go
+type HelpSection struct {
+    Title   string
+    Keymaps []Keymap
+}
+
+type Keymap struct {
+    Key         string
+    Description string
+}
+```
+
+Sections include:
+- Global shortcuts
+- Sidebar navigation
+- Table navigation
+- Query editor (normal mode, insert mode, execution)
+- Filter dialog
+- Modal controls
+
+**Display Pattern**:
+- Scrollable list of sections
+- Tab/Shift+Tab to switch sections
+- j/k to scroll within section
+- Auto-calculated height based on terminal size
+- Rendered as full-screen modal overlay
+
 ## Data Flow
 
-### Current Implementation (Mock Data)
+### Current Implementation (MySQL Database)
 
 1. App starts → `main.go` creates `app.New()`
-2. First `WindowSizeMsg` → `getTableData()` returns hardcoded city data
-3. User interacts → focus switches, filters apply, theme changes
-4. All data is static (see `app/update.go:187-253`)
+2. User creates connection → Stored in `~/.config/sq/connections.json`
+3. User selects table → Async query fetches data with pagination
+4. Query returns results → `TableDataMsg` updates model state
+5. Table renders with foreign key information and pagination controls
+6. User interactions:
+   - Filter apply → Re-query with WHERE clause + pagination
+   - Page navigation (J/K) → Fetch next/previous page
+   - Foreign key navigation (gd) → Open referenced table in new tab
+   - Custom query (e) → Execute SQL with syntax highlighting and formatting
 
-### Future Implementation (Real Database)
-
-Planned pattern for database queries:
-1. User selects database in sidebar → sends query command
-2. Query runs asynchronously → returns `tea.Msg` with results
-3. Update handler receives results → updates table rows
-4. View re-renders with new data
-
-**Note**: Bubble Tea uses message-passing for async operations. Don't block Update().
+**Note**: Bubble Tea uses message-passing for async operations. Database queries don't block Update().
 
 ## Testing
 
@@ -606,6 +782,18 @@ middleSection := lipgloss.JoinHorizontal(lipgloss.Top,
 - `github.com/charmbracelet/lipgloss` - Styling and layout
 - `github.com/charmbracelet/bubbles` - Pre-built components (textinput, etc.)
 
+### Database & SQL
+- `github.com/go-sql-driver/mysql` - MySQL database driver
+- `github.com/ktr0731/go-sqlfmt` - SQL formatting library
+
+### Syntax Highlighting
+- `github.com/alecthomas/chroma/v2` - Syntax highlighting engine
+- `github.com/alecthomas/chroma/v2/lexers` - Language lexers (SQL)
+- `github.com/alecthomas/chroma/v2/styles` - Color schemes for syntax
+
+### Utilities
+- `github.com/atotto/clipboard` - Cross-platform clipboard access
+
 ### Indirect Dependencies
 - Console handling, terminal detection, text rendering (see `go.mod`)
 
@@ -620,18 +808,26 @@ go mod tidy
 From README.md and codebase structure:
 
 **Planned Features**:
-- [ ] Database connection management (PostgreSQL, MySQL, SQLite)
-- [ ] Query execution
-- [ ] Real data fetching and display
+- [ ] PostgreSQL and SQLite support
 - [ ] Detail pane for selected row
-- [ ] Edit/insert/delete operations
-- [ ] Connection configuration UI
-- [ ] Query history
+- [ ] Edit/insert/delete operations with confirmation
+- [ ] Query history and saved queries
+- [ ] Export data (CSV, JSON)
+- [ ] Import data from files
+- [ ] Connection pooling
+- [ ] Multi-database queries
 
-**Current Placeholders**:
-- `ui/main/record.go` - Future main record view
-- `ui/detail/detail.go` - Future detail pane
-- Mock data in `app/update.go:getTableData()`
+**Recently Completed**:
+- [x] MySQL database connection management
+- [x] Query editor with vim-mode
+- [x] SQL syntax highlighting and formatting
+- [x] Pagination for large datasets
+- [x] Foreign key navigation (goto definition)
+- [x] Table structure viewer
+- [x] Filter dialogs with multiple conditions
+- [x] Help modal with keybindings
+- [x] Tabbed interface for multiple views
+- [x] Connection storage
 
 ## Debugging Tips
 
@@ -649,10 +845,49 @@ From README.md and codebase structure:
 ## Quick Reference
 
 ### Bubble Tea Message Types
+
+**Built-in Messages:**
 - `tea.WindowSizeMsg` - Terminal resized
 - `tea.KeyMsg` - Keyboard input (check with `msg.String()`)
 - `tea.MouseMsg` - Mouse events (not used in this app)
-- Custom messages - Define your own `type MyMsg struct{}`
+
+**Custom Messages (defined in UI component packages):**
+
+From `sidebar` package:
+- `ConnectionSelectedMsg` - User selected a connection
+  - Fields: `ConnectionName`, `ConnectionType`, `ConnectionURL`
+- `TableSelectedMsg` - User selected a table to view
+  - Fields: `ConnectionName`, `TableName`
+
+From `queryeditor` package:
+- `CellPreviewMsg` - Request to preview cell content
+  - Fields: `Content`
+- `YankCellMsg` - Request to copy cell to clipboard
+  - Fields: `Content`
+- `YankQueryMsg` - Request to copy query to clipboard
+  - Fields: `Content`
+- `QueryExecuteMsg` - Execute SQL query
+  - Fields: `Query`, `ConnectionName`, `DatabaseName`
+
+From `table` package:
+- `NextPageMsg` - Navigate to next page (pagination)
+- `PrevPageMsg` - Navigate to previous page (pagination)
+
+**Usage Pattern:**
+Components emit messages that bubble up to the app's Update handler:
+```go
+// In component:
+return m, func() tea.Msg {
+    return sidebar.TableSelectedMsg{
+        ConnectionName: connName,
+        TableName: tableName,
+    }
+}
+
+// In app/update.go:
+case sidebar.TableSelectedMsg:
+    // Handle table selection, fetch data, create new tab
+```
 
 ### Lipgloss Quick Patterns
 ```go

@@ -3,7 +3,6 @@ package app
 import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
-	"github.com/sheenazien8/sq/ui/tab"
 	"github.com/sheenazien8/sq/ui/theme"
 )
 
@@ -76,36 +75,16 @@ func (m Model) View() string {
 
 	contentHeight := m.ContentHeight - 2
 
-	// Filter bar is always 3 lines high
-	filterBarHeight := 3
-	tableHeight := contentHeight - filterBarHeight
-
 	var mainArea string
 
 	// Show tabs if they exist, otherwise show placeholder
 	if m.Tabs.HasTabs() {
-		tabType := m.Tabs.GetActiveTabType()
-
-		// For query editor tabs, don't show filter bar - use full height
-		if tabType == tab.TabTypeQuery {
-			contentView := tableBorderStyle.
-				Width(m.ContentWidth - 4).
-				Height(contentHeight).
-				Render(m.Tabs.View())
-			mainArea = contentView
-		} else {
-			// Show tabbed interface with filter bar
-			// Account for border (2 chars on each side = 4 total)
-			contentView := tableBorderStyle.
-				Width(m.ContentWidth - 4).
-				Height(tableHeight).
-				Render(m.Tabs.View())
-
-			// Always show filter input
-			filterView := m.Filter.View()
-
-			mainArea = lipgloss.JoinVertical(lipgloss.Left, filterView, contentView)
-		}
+		// For all tabs, use full height since filter is now inside tab for table tabs
+		contentView := tableBorderStyle.
+			Width(m.ContentWidth - 4).
+			Height(contentHeight).
+			Render(m.Tabs.View())
+		mainArea = contentView
 	} else {
 		// Show placeholder when no tabs are open
 		// Account for border (2 chars on each side = 4 total)
@@ -119,7 +98,7 @@ func (m Model) View() string {
 
 		mainArea = tableBorderStyle.
 			Width(m.ContentWidth - 4).
-			Height(contentHeight - 2).
+			Height(contentHeight).
 			Render(placeholder)
 	}
 

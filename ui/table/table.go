@@ -168,7 +168,7 @@ func (m *Model) SetColumns(columns []Column) {
 
 // visibleRows returns the number of rows that can be displayed
 func (m Model) visibleRows() int {
-	return max(0, m.height-3)
+	return max(0, m.height)
 }
 
 // visibleCols calculates how many columns fit in the current width
