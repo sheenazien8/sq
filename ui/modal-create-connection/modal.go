@@ -1,6 +1,8 @@
 package modalcreateconnection
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -38,12 +40,12 @@ func NewContent() *Content {
 	nameInput := textinput.New()
 	nameInput.Placeholder = "Your connection name"
 	nameInput.CharLimit = 256
-	nameInput.Width = 50
+	nameInput.Width = 1000 // Large width to prevent internal wrapping
 
 	urlInput := textinput.New()
 	urlInput.Placeholder = "mysql://user:password@localhost:3306/dbname"
 	urlInput.CharLimit = 256
-	urlInput.Width = 50
+	urlInput.Width = 1000 // Large width to prevent internal wrapping
 
 	nameInput.Focus() // Focus name input by default
 
@@ -221,7 +223,7 @@ func (c *Content) View() string {
 		c.nameInput.TextStyle = lipgloss.NewStyle().Foreground(t.Colors.ForegroundDim)
 		c.nameInput.PromptStyle = lipgloss.NewStyle().Foreground(t.Colors.ForegroundDim)
 	}
-	nameDisplay = c.nameInput.View()
+	nameDisplay = strings.ReplaceAll(c.nameInput.View(), "\n", " ")
 	nameRow := lipgloss.JoinHorizontal(lipgloss.Center, nameLabel, nameDisplay)
 
 	// Driver selector
@@ -246,7 +248,7 @@ func (c *Content) View() string {
 		c.urlInput.TextStyle = lipgloss.NewStyle().Foreground(t.Colors.ForegroundDim)
 		c.urlInput.PromptStyle = lipgloss.NewStyle().Foreground(t.Colors.ForegroundDim)
 	}
-	urlDisplay = c.urlInput.View()
+	urlDisplay = strings.ReplaceAll(c.urlInput.View(), "\n", " ")
 	urlRow := lipgloss.JoinHorizontal(lipgloss.Center, urlLabel, urlDisplay)
 
 	// Buttons

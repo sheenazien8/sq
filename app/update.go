@@ -91,6 +91,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m = m.loadPrevPage()
 		return m, nil
 
+	case table.SortMsg:
+		// Handle sort request
+		activeTab := m.Tabs.ActiveTab()
+		if activeTab != nil && activeTab.Type == tab.TabTypeTable {
+			if tableModel, ok := activeTab.Content.(table.Model); ok {
+				// Determine sort direction
+				var direction table.SortDirection
+				if tableModel.GetSortColumnIdx() == msg.ColumnIdx {
+					// Toggle direction if same column
+					currentDir := tableModel.GetSortDirection()
+					if currentDir == table.SortAsc {
+						direction = table.SortDesc
+					} else {
+						direction = table.SortAsc
+					}
+				} else {
+					// Default to ascending for new column
+					direction = table.SortAsc
+				}
+				tableModel.SetSort(msg.ColumnIdx, direction)
+				m.Tabs.UpdateActiveTabContent(tableModel)
+
+				// Reload data with sorting
+				m = m.reloadTableDataWithSort()
+			}
+		}
+		return m, nil
+
 	case tab.TabSwitchedMsg:
 		// Update filter UI to show the new tab's filter
 
@@ -974,7 +1002,7 @@ func (m Model) getFooterHelp() string {
 			if tabType == tab.TabTypeQuery {
 				return "?: Help | F5: Execute | Ctrl+R: Results | []: Tabs | Ctrl+W: Close | q: Quit"
 			}
-			return "?: Help | j/k/h/l: Navigate | </>: Page | /: Filter | []: Tabs | q: Quit"
+			return "?: Help | j/k/h/l: Navigate | Space: Sort | </>: Page | /: Filter | []: Tabs | q: Quit"
 		}
 		return "?: Help | s: Toggle Sidebar | Tab: Switch | q: Quit"
 
@@ -1300,6 +1328,114 @@ func (m Model) loadPage(page int) Model {
 		tableModel.SetPagination(result.Page, result.TotalPages, result.TotalRows, result.PageSize)
 		m.Tabs.UpdateActiveTabContent(tableModel)
 	}
+
+	return m
+}
+
+// reloadTableDataWithSort reloads table data applying current sort and filters
+func (m Model) reloadTableDataWithSort() Model {
+	activeTab := m.Tabs.ActiveTab()
+	if activeTab == nil || activeTab.Type != tab.TabTypeTable {
+		return m
+	}
+
+	// Get connection and table info from tab name (format: "connection.table")
+	tabName := m.Tabs.GetActiveTabName()
+	parts := strings.Split(tabName, ".")
+	if len(parts) != 2 {
+		logger.Error("Invalid tab name format", map[string]any{"tab": tabName})
+		return m
+	}
+
+	connectionName := parts[0]
+	tableName := parts[1]
+
+	driver, exists := m.dbConnections[connectionName]
+	if !exists {
+		logger.Error("No active connection", map[string]any{"connection": connectionName})
+		return m
+	}
+
+	// Extract database name
+	connections := m.Sidebar.GetConnections()
+	var dbName string
+	for _, conn := range connections {
+		if conn.Name == connectionName {
+			dbName = extractDatabaseName(conn.Host, conn.Type)
+			break
+		}
+	}
+
+	if dbName == "" {
+		logger.Error("Could not extract database name", map[string]any{})
+		return m
+	}
+
+	// Build pagination with sort info
+	tableModel, ok := activeTab.Content.(table.Model)
+	if !ok {
+		return m
+	}
+
+	sortColumn := tableModel.GetSortColumnName()
+	sortOrder := "ASC"
+	if tableModel.GetSortDirection() == table.SortDesc {
+		sortOrder = "DESC"
+	}
+
+	pagination := drivers.Pagination{
+		Page:       1, // Reset to page 1 when sorting changes
+		PageSize:   m.pageSize,
+		SortColumn: sortColumn,
+		SortOrder:  sortOrder,
+	}
+
+	// Get filters if any
+	filters := m.Tabs.GetActiveTabFilters()
+
+	var result *drivers.PaginatedResult
+	var err error
+
+	if len(filters) == 0 {
+		logger.Debug("Loading data with sort", map[string]any{
+			"sort_column": sortColumn,
+			"sort_order":  sortOrder,
+		})
+		result, err = driver.GetTableDataPaginated(dbName, tableName, pagination)
+	} else {
+		// Get the raw WHERE clause from the filter
+		whereClause := ""
+		if len(filters) > 0 {
+			whereClause = filters[0].WhereClause
+		}
+		logger.Debug("Loading data with sort and filter", map[string]any{
+			"sort_column": sortColumn,
+			"sort_order":  sortOrder,
+			"where":       whereClause,
+		})
+		result, err = driver.GetTableDataWithFilterPaginated(dbName, tableName, whereClause, pagination)
+	}
+
+	if err != nil {
+		logger.Error("Failed to load sorted data", map[string]any{
+			"error": err.Error(),
+		})
+		return m
+	}
+
+	// Update current page
+	m.currentPage = result.Page
+
+	// Convert data to table.Row format (skip header row)
+	tableRows := make([]table.Row, len(result.Data)-1)
+	for i := 1; i < len(result.Data); i++ {
+		tableRows[i-1] = table.Row(result.Data[i])
+	}
+
+	// Update tab with sorted data
+	tableModel.SetRows(tableRows)
+	tableModel.SetPagination(result.Page, result.TotalPages, result.TotalRows, result.PageSize)
+	m.Tabs.UpdateActiveTabContent(tableModel)
 
 	return m
 }

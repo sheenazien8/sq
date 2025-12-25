@@ -77,6 +77,7 @@ func NewHelpContent() *HelpContent {
 					{"End", "Jump to last row"},
 					{">", "Next page (query)"},
 					{"<", "Previous page (query)"},
+					{"Space", "Sort by column (toggle ASC/DESC)"},
 					{"y", "Yank (copy) cell"},
 					{"p", "Preview cell content"},
 					{"gd", "Go to definition (FK)"},

@@ -14,6 +14,11 @@ type NextPageMsg struct{}
 // PrevPageMsg is sent when user wants to fetch the previous page of results
 type PrevPageMsg struct{}
 
+// SortMsg is sent when user wants to sort by a column
+type SortMsg struct {
+	ColumnIdx int
+}
+
 // Column represents a table column with title and width
 type Column struct {
 	Title string
@@ -27,6 +32,15 @@ type Column struct {
 
 // Row is a slice of strings representing a table row
 type Row []string
+
+// SortDirection represents the direction of sorting
+type SortDirection int
+
+const (
+	SortNone SortDirection = iota
+	SortAsc
+	SortDesc
+)
 
 // Model represents a scrollable table with both vertical and horizontal scrolling
 type Model struct {
@@ -53,6 +67,10 @@ type Model struct {
 
 	// Column auto-fit state
 	allColumnsAutoFit bool // Global toggle for all columns
+
+	// Sort state
+	sortColumnIdx int
+	sortDirection SortDirection
 }
 
 // New creates a new table model
@@ -164,6 +182,35 @@ func (m *Model) SetColumns(columns []Column) {
 	if m.cursorCol >= len(columns) {
 		m.cursorCol = max(0, len(columns)-1)
 	}
+}
+
+// SetSort sets the sort column and direction (for UI tracking only)
+func (m *Model) SetSort(columnIdx int, direction SortDirection) {
+	if columnIdx < 0 || columnIdx >= len(m.columns) {
+		m.sortColumnIdx = -1
+		m.sortDirection = SortNone
+		return
+	}
+	m.sortColumnIdx = columnIdx
+	m.sortDirection = direction
+}
+
+// GetSortColumnIdx returns the currently sorted column index
+func (m Model) GetSortColumnIdx() int {
+	return m.sortColumnIdx
+}
+
+// GetSortDirection returns the current sort direction
+func (m Model) GetSortDirection() SortDirection {
+	return m.sortDirection
+}
+
+// GetSortColumnName returns the name of the sorted column
+func (m Model) GetSortColumnName() string {
+	if m.sortColumnIdx < 0 || m.sortColumnIdx >= len(m.columns) {
+		return ""
+	}
+	return m.columns[m.sortColumnIdx].Title
 }
 
 // visibleRows returns the number of rows that can be displayed
@@ -283,6 +330,11 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			} else {
 				m.colOffset = 0
 			}
+		case " ":
+			// Sort by current column
+			return m, func() tea.Msg {
+				return SortMsg{ColumnIdx: m.cursorCol}
+			}
 		}
 	}
 
@@ -339,13 +391,23 @@ func (m Model) renderHeaderLine(startCol, endCol int) string {
 	for i := startCol; i < endCol; i++ {
 		col := m.columns[i]
 		effectiveWidth := m.getEffectiveColumnWidth(i)
-		cellText := truncateOrPad(col.Title, effectiveWidth)
+		cellText := col.Title
+
+		// Add sort indicator to the left if this column is sorted
+		if i == m.sortColumnIdx && m.sortDirection != SortNone {
+			sortIcon := "↑ "
+			if m.sortDirection == SortDesc {
+				sortIcon = "↓ "
+			}
+			cellText = sortIcon + cellText
+		}
 
 		// Add visual indicator for foreign key columns
 		if col.IsForeignKey {
-			cellText = truncateOrPad(col.Title+" [FK]", effectiveWidth)
+			cellText = cellText + " [FK]"
 		}
 
+		cellText = truncateOrPad(cellText, effectiveWidth)
 		cell := t.TableHeader.Render(" " + cellText + " ")
 		cells = append(cells, cell)
 	}
