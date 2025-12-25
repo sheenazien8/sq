@@ -7,8 +7,10 @@ const (
 
 // Pagination represents pagination parameters
 type Pagination struct {
-	Page     int
-	PageSize int
+	Page       int
+	PageSize   int
+	SortColumn string // Column name to sort by (empty = no sort)
+	SortOrder  string // "ASC" or "DESC"
 }
 
 // PaginatedResult represents paginated query results

@@ -215,7 +215,18 @@ func (db *MySQL) GetTableDataPaginated(database, table string, pagination Pagina
 	}
 
 	// Get paginated data
-	query := "SELECT * FROM " + database + "." + table + " LIMIT " + strconv.Itoa(pagination.PageSize) + " OFFSET " + strconv.Itoa(offset)
+	query := "SELECT * FROM " + database + "." + table
+
+	// Add ORDER BY if sort column is specified
+	if pagination.SortColumn != "" {
+		sortOrder := pagination.SortOrder
+		if sortOrder != "DESC" {
+			sortOrder = "ASC"
+		}
+		query += " ORDER BY `" + pagination.SortColumn + "` " + sortOrder
+	}
+
+	query += " LIMIT " + strconv.Itoa(pagination.PageSize) + " OFFSET " + strconv.Itoa(offset)
 
 	logger.Debug("Executing paginated query", map[string]any{
 		"query":    query,
@@ -301,7 +312,18 @@ func (db *MySQL) GetTableDataWithFilterPaginated(database, table string, whereCl
 	offset := max((pagination.Page-1)*pagination.PageSize, 0)
 
 	// Build final query with pagination
-	query := baseQuery + " LIMIT " + strconv.Itoa(pagination.PageSize) + " OFFSET " + strconv.Itoa(offset)
+	query := baseQuery
+
+	// Add ORDER BY if sort column is specified
+	if pagination.SortColumn != "" {
+		sortOrder := pagination.SortOrder
+		if sortOrder != "DESC" {
+			sortOrder = "ASC"
+		}
+		query += " ORDER BY `" + pagination.SortColumn + "` " + sortOrder
+	}
+
+	query += " LIMIT " + strconv.Itoa(pagination.PageSize) + " OFFSET " + strconv.Itoa(offset)
 
 	logger.Debug("Executing filtered paginated query", map[string]any{
 		"query":    query,

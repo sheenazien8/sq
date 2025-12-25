@@ -33,6 +33,13 @@ go build -o sq
 go run .
 ```
 
+### Command Line Options
+```bash
+sq --help                    # Show help
+sq --version                 # Show version
+sq --create-connection       # Create a new database connection
+```
+
 ## Features
 
 ### Current Features
@@ -205,7 +212,7 @@ sq/
 │   ├── update.go        # Update() - handles messages and input
 │   └── view.go          # View() - renders the UI
 ├── config/              # Application configuration
-│   └── config.go        # Config loading/saving (~/.config/db-client-tui/config.json)
+│   └── config.go        # Config loading/saving (~/.config/sq/config.json)
 ├── drivers/             # Database drivers
 │   ├── driver.go        # Driver interface definition
 │   ├── mysql.go         # MySQL driver implementation (with pagination support)
@@ -256,7 +263,7 @@ Available themes: default, dracula, nord, gruvbox, tokyo-night, catppuccin, mono
 
 ## Database Connections
 
-Connections are stored in `~/.config/sq/connections.json`.
+Connections are stored in `~/.config/sq/storage.db`.
 
 ### Supported Databases
 - **MySQL** - Full support including:

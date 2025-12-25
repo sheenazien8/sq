@@ -68,7 +68,8 @@ type Model struct {
 func New() Model {
 	ti := textinput.New()
 	ti.Placeholder = "Search"
-	ti.CharLimit = 50
+	ti.CharLimit = 20
+	ti.Width = 1000 // Large width to prevent internal wrapping
 
 	return Model{
 		connections: getConnections(),
@@ -209,6 +210,7 @@ func (m *Model) ClearFilterInput() {
 	m.filterInput = textinput.New()
 	m.filterInput.Placeholder = "Search"
 	m.filterInput.CharLimit = 50
+	m.filterInput.Width = 1000 // Large width to prevent internal wrapping
 	if m.showFilter {
 		m.filterInput.Focus()
 	}
@@ -510,7 +512,9 @@ func (m Model) View() string {
 			Foreground(t.Colors.Primary).
 			Background(t.Colors.SelectionBg).
 			Padding(0, 1)
-		filterLine := filterStyle.Width(innerWidth).Render(m.filterInput.View())
+		// Replace newlines to prevent wrapping that breaks UI
+		filterView := strings.ReplaceAll(m.filterInput.View(), "\n", " ")
+		filterLine := filterStyle.Width(innerWidth).Render(filterView)
 		lines = append(lines, filterLine)
 	}
 
