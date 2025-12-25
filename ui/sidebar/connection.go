@@ -520,10 +520,10 @@ func (m Model) View() string {
 		titleText = " (filtered: " + m.filterText + ")"
 	}
 	title := t.SidebarTitle.
-        Align(lipgloss.Center, lipgloss.Center).
-        Width(innerWidth).
-        Height(3).
-        Render(titleText)
+		Align(lipgloss.Center, lipgloss.Center).
+		Width(innerWidth).
+		Height(3).
+		Render(titleText)
 
 	lines = append(lines, title)
 

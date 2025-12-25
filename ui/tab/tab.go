@@ -599,7 +599,7 @@ func (m *Model) SetActiveTabFilter(f *filter.Filter) {
 func (m *Model) AddActiveTabFilter(f filter.Filter) {
 	if m.activeTab >= 0 && m.activeTab < len(m.tabs) {
 		m.tabs[m.activeTab].ActiveFilter = &f
-        m.tabs[m.activeTab].FilterUI.SetActive(true)
+		m.tabs[m.activeTab].FilterUI.SetActive(true)
 	}
 }
 
@@ -614,7 +614,7 @@ func (m *Model) RemoveActiveTabFilter(index int) {
 func (m *Model) ClearActiveTabFilters() {
 	if m.activeTab >= 0 && m.activeTab < len(m.tabs) {
 		m.tabs[m.activeTab].ActiveFilter = nil
-        m.tabs[m.activeTab].FilterUI.Clear()
+		m.tabs[m.activeTab].FilterUI.Clear()
 	}
 }
 
