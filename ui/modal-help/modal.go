@@ -139,6 +139,9 @@ func NewHelpContent() *HelpContent {
 				Title: "Filter",
 				Keymaps: []Keymap{
 					{"/", "Focus filter input"},
+					{"Tab", "Complete current word"},
+					{"Ctrl+N", "Next suggestion"},
+					{"Ctrl+P", "Previous suggestion"},
 					{"Enter", "Apply filter & blur"},
 					{"Esc", "Blur without applying"},
 					{"Ctrl+C", "Clear filter & refresh"},
