@@ -210,13 +210,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return m, nil
 
-    case filter.MapKeyMsg:
-        logger.Info("Map key filter fired", map[string]any{
-            "Key": msg.Key,
-        })
-        if msg.Key != "ctrl+c" {
-            m.Tabs.SetFocused(true)
-        }
+	case filter.MapKeyMsg:
+		logger.Info("Map key filter fired", map[string]any{
+			"Key": msg.Key,
+		})
+		if msg.Key != "ctrl+c" {
+			m.Tabs.SetFocused(true)
+		}
 
 	case tea.WindowSizeMsg:
 		m.TerminalWidth = msg.Width
@@ -1182,8 +1182,7 @@ func (m *Model) goToForeignKeyDefinition() error {
 	m.Tabs.AddActiveTabFilter(filter.Filter{
 		WhereClause: whereClause,
 	})
-    m.Tabs.FocusFilter()
-
+	m.Tabs.FocusFilter()
 
 	tableWidth := m.ContentWidth - 4
 	tableHeight := m.ContentHeight - 3 - 2

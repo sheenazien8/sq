@@ -298,7 +298,7 @@ func (db *MySQL) GetTableDataWithFilterPaginated(database, table string, whereCl
 	}
 
 	// Calculate offset
-	offset := max((pagination.Page - 1) * pagination.PageSize, 0)
+	offset := max((pagination.Page-1)*pagination.PageSize, 0)
 
 	// Build final query with pagination
 	query := baseQuery + " LIMIT " + strconv.Itoa(pagination.PageSize) + " OFFSET " + strconv.Itoa(offset)
