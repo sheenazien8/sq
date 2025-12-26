@@ -141,6 +141,9 @@ func CreateConnection(name, driverName, url string) (int64, error) {
 		driver = &drivers.PostgreSQL{}
 	case drivers.DriverTypeSQLite:
 		driver = &drivers.SQLite{}
+	case drivers.DriverTypeMongoDB, drivers.DriverTypeMongoDBAtlas:
+		// Both MongoDB and MongoDB Atlas use the same driver
+		driver = &drivers.MongoDB{}
 	default:
 		return 0, fmt.Errorf("unsupported driver: %s", driverName)
 	}
@@ -378,6 +381,9 @@ func Connect(conn *Connection) (drivers.Driver, error) {
 		driver = &drivers.PostgreSQL{}
 	case drivers.DriverTypeSQLite:
 		driver = &drivers.SQLite{}
+	case drivers.DriverTypeMongoDB, drivers.DriverTypeMongoDBAtlas:
+		// Both MongoDB and MongoDB Atlas use the same driver
+		driver = &drivers.MongoDB{}
 	default:
 		return nil, fmt.Errorf("unsupported driver: %s", conn.Driver)
 	}
@@ -405,6 +411,9 @@ func TestConnectionByID(id int64) error {
 		driver = &drivers.PostgreSQL{}
 	case drivers.DriverTypeSQLite:
 		driver = &drivers.SQLite{}
+	case drivers.DriverTypeMongoDB, drivers.DriverTypeMongoDBAtlas:
+		// Both MongoDB and MongoDB Atlas use the same driver
+		driver = &drivers.MongoDB{}
 	default:
 		return fmt.Errorf("unsupported driver: %s", conn.Driver)
 	}

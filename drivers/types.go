@@ -2,9 +2,11 @@ package drivers
 
 // Driver type constants for use in switch cases and comparisons
 const (
-	DriverTypeMySQL      = "mysql"
-	DriverTypePostgreSQL = "postgresql"
-	DriverTypeSQLite     = "sqlite"
+	DriverTypeMySQL        = "mysql"
+	DriverTypePostgreSQL   = "postgresql"
+	DriverTypeSQLite       = "sqlite"
+	DriverTypeMongoDB      = "mongodb"
+	DriverTypeMongoDBAtlas = "mongodb-atlas"
 )
 
 // ColumnInfo represents detailed column information

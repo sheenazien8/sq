@@ -738,6 +738,8 @@ func (m *Model) connectToDatabase(name, connType, url string) error {
 		driver = &drivers.PostgreSQL{}
 	case "sqlite":
 		driver = &drivers.SQLite{}
+	case "mongodb", "mongodb-atlas":
+		driver = &drivers.MongoDB{}
 	default:
 		return fmt.Errorf("unsupported database type: %s", connType)
 	}
@@ -803,6 +805,34 @@ func extractDatabaseName(url, connType string) string {
 			filePath := strings.Split(parts[1], "?")[0]
 			return filePath
 		}
+	case "mongodb":
+		// For MongoDB URLs like "mongodb://user:pass@host:port/database"
+		// Extract the last part after the last / (the database name)
+		parts := strings.Split(url, "/")
+		if len(parts) > 1 {
+			// Get the last part and remove query parameters
+			dbPart := strings.Split(parts[len(parts)-1], "?")[0]
+			if dbPart != "" && dbPart != "" {
+				return dbPart
+			}
+		}
+		// If no database in URL, use a default
+		return "test"
+	case "mongodb-atlas":
+		// For MongoDB Atlas URLs like "mongodb+srv://user:pass@cluster/database?options"
+		// The database is after mongodb+srv://user:pass@cluster/
+		idx := strings.LastIndex(url, "/")
+		if idx != -1 {
+			remaining := url[idx+1:]
+			// Remove query parameters
+			dbPart := strings.Split(remaining, "?")[0]
+			if dbPart != "" {
+				return dbPart
+			}
+		}
+		// If no database specified, MongoDB will use a default
+		// Return empty string to let MongoDB driver use its stored database
+		return ""
 	}
 	return ""
 }

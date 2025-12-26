@@ -2,9 +2,11 @@ package drivers
 
 // Deprecated: Use constants from types.go instead
 const (
-	DriverMySQL      string = DriverTypeMySQL
-	DriverPostgreSQL string = DriverTypePostgreSQL
-	DriverSQLite     string = DriverTypeSQLite
+	DriverMySQL        string = DriverTypeMySQL
+	DriverPostgreSQL   string = DriverTypePostgreSQL
+	DriverSQLite       string = DriverTypeSQLite
+	DriverMongoDB      string = DriverTypeMongoDB
+	DriverMongoDBAtlas string = DriverTypeMongoDBAtlas
 )
 
 // Pagination represents pagination parameters

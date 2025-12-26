@@ -23,6 +23,7 @@ const (
 	FocusUsernameInput
 	FocusPasswordInput
 	FocusDatabaseInput
+	FocusUriInput
 	FocusSubmitButton
 	FocusCancelButton
 )
@@ -35,20 +36,23 @@ type ConnectionFields struct {
 	usernameInput textinput.Model
 	passwordInput textinput.Model
 	databaseInput textinput.Model
+	uriInput      textinput.Model // For MongoDB Atlas direct URL input
 }
 
 // Content implements modal.Content for creating a new connection
 type Content struct {
-	drivers        []string
-	driverIndex    int // 0 = MySQL, 1 = PostgreSQL, 2 = SQLite
-	focusField     FocusField
-	result         modal.Result
-	closed         bool
-	width          int
-	mysqlFields    ConnectionFields
-	postgresFields ConnectionFields
-	sqliteFields   ConnectionFields
-	errorMsg       string
+	drivers            []string
+	driverIndex        int // 0 = MySQL, 1 = PostgreSQL, 2 = SQLite, 3 = MongoDB, 4 = MongoDB Atlas
+	focusField         FocusField
+	result             modal.Result
+	closed             bool
+	width              int
+	mysqlFields        ConnectionFields
+	postgresFields     ConnectionFields
+	sqliteFields       ConnectionFields
+	mongodbFields      ConnectionFields
+	mongodbAtlasFields ConnectionFields
+	errorMsg           string
 }
 
 // NewContent creates a new create connection content
@@ -56,16 +60,20 @@ func NewContent() *Content {
 	mysql := createConnectionFields()
 	postgres := createConnectionFields()
 	sqlite := createSQLiteConnectionFields()
+	mongodb := createMongoDBConnectionFields()
+	mongodbAtlas := createMongoDBAtlasConnectionFields()
 
 	return &Content{
-		drivers:        []string{"mysql", "postgresql", "sqlite"},
-		driverIndex:    0,
-		focusField:     FocusDriverSelect,
-		result:         modal.ResultNone,
-		closed:         false,
-		mysqlFields:    mysql,
-		postgresFields: postgres,
-		sqliteFields:   sqlite,
+		drivers:            []string{"mysql", "postgresql", "sqlite", "mongodb", "mongodb-atlas"},
+		driverIndex:        0,
+		focusField:         FocusDriverSelect,
+		result:             modal.ResultNone,
+		closed:             false,
+		mysqlFields:        mysql,
+		postgresFields:     postgres,
+		sqliteFields:       sqlite,
+		mongodbFields:      mongodb,
+		mongodbAtlasFields: mongodbAtlas,
 	}
 }
 
@@ -141,14 +149,92 @@ func createSQLiteConnectionFields() ConnectionFields {
 	}
 }
 
+func createMongoDBConnectionFields() ConnectionFields {
+	nameInput := textinput.New()
+	nameInput.Placeholder = "e.g., My MongoDB"
+	nameInput.CharLimit = 256
+	nameInput.Width = 40
+
+	hostInput := textinput.New()
+	hostInput.Placeholder = "localhost"
+	hostInput.CharLimit = 256
+	hostInput.Width = 40
+	hostInput.SetValue("localhost")
+
+	portInput := textinput.New()
+	portInput.CharLimit = 5
+	portInput.Width = 40
+	portInput.SetValue("27017") // Default MongoDB port
+
+	usernameInput := textinput.New()
+	usernameInput.Placeholder = "username"
+	usernameInput.CharLimit = 256
+	usernameInput.Width = 40
+
+	passwordInput := textinput.New()
+	passwordInput.Placeholder = "password"
+	passwordInput.CharLimit = 256
+	passwordInput.Width = 40
+	passwordInput.EchoMode = textinput.EchoPassword
+
+	// Database name for MongoDB
+	databaseInput := textinput.New()
+	databaseInput.Placeholder = "database name"
+	databaseInput.CharLimit = 256
+	databaseInput.Width = 40
+
+	return ConnectionFields{
+		nameInput:     nameInput,
+		hostInput:     hostInput,
+		portInput:     portInput,
+		usernameInput: usernameInput,
+		passwordInput: passwordInput,
+		databaseInput: databaseInput,
+	}
+}
+
+func createMongoDBAtlasConnectionFields() ConnectionFields {
+	nameInput := textinput.New()
+	nameInput.Placeholder = "e.g., CompassNFC"
+	nameInput.CharLimit = 256
+	nameInput.Width = 40
+
+	// MongoDB Atlas URI input
+	uriInput := textinput.New()
+	uriInput.Placeholder = "mongodb+srv://user:pass@cluster.mongodb.net/database?retryWrites=true&w=majority"
+	uriInput.CharLimit = 512
+	uriInput.Width = 40
+
+	// Dummy inputs (not used for Atlas URI mode)
+	hostInput := textinput.New()
+	portInput := textinput.New()
+	usernameInput := textinput.New()
+	passwordInput := textinput.New()
+	databaseInput := textinput.New()
+
+	return ConnectionFields{
+		nameInput:     nameInput,
+		hostInput:     hostInput,
+		portInput:     portInput,
+		usernameInput: usernameInput,
+		passwordInput: passwordInput,
+		databaseInput: databaseInput,
+		uriInput:      uriInput,
+	}
+}
+
 // getCurrentFields returns the current driver's fields
 func (c *Content) getCurrentFields() *ConnectionFields {
 	if c.driverIndex == 0 {
 		return &c.mysqlFields
 	} else if c.driverIndex == 1 {
 		return &c.postgresFields
+	} else if c.driverIndex == 2 {
+		return &c.sqliteFields
+	} else if c.driverIndex == 3 {
+		return &c.mongodbFields
 	}
-	return &c.sqliteFields
+	return &c.mongodbAtlasFields
 }
 
 // createDriver creates a driver instance for the current driver
@@ -160,6 +246,8 @@ func (c *Content) createDriver() (drivers.Driver, error) {
 		return &drivers.PostgreSQL{}, nil
 	case drivers.DriverTypeSQLite:
 		return &drivers.SQLite{}, nil
+	case drivers.DriverTypeMongoDB, drivers.DriverTypeMongoDBAtlas:
+		return &drivers.MongoDB{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported driver: %s", c.GetDriver())
 	}
@@ -181,7 +269,15 @@ func (c *Content) validate() string {
 		return ""
 	}
 
-	// MySQL and PostgreSQL need host, port, username, and database
+	// MongoDB Atlas only needs the connection URI
+	if c.GetDriver() == drivers.DriverTypeMongoDBAtlas {
+		if uri := fields.uriInput.Value(); uri == "" {
+			return "MongoDB Atlas connection URI is required"
+		}
+		return ""
+	}
+
+	// MySQL, PostgreSQL, and MongoDB need host, port, username, and database
 	if host := fields.hostInput.Value(); host == "" {
 		return "Host is required"
 	}
@@ -209,6 +305,12 @@ func (c *Content) validate() string {
 func (c *Content) getDefaultPort() string {
 	if c.driverIndex == 0 {
 		return "3306"
+	} else if c.driverIndex == 1 {
+		return "5432"
+	} else if c.driverIndex == 3 {
+		return "27017"
+	} else if c.driverIndex == 4 {
+		return "" // MongoDB Atlas doesn't use a port
 	}
 	return "5432"
 }
@@ -278,6 +380,29 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 			}
 		}
 
+		// Handle MongoDB Atlas URI input
+		if c.focusField == FocusUriInput && c.GetDriver() == drivers.DriverTypeMongoDBAtlas {
+			switch msg.String() {
+			case "esc":
+				logger.Debug("Create connection cancelled", nil)
+				c.result = modal.ResultCancel
+				c.closed = true
+				return c, nil
+			case "tab", "down":
+				c.focusField = FocusSubmitButton
+				c.updateFocus()
+				return c, nil
+			case "shift+tab", "up":
+				c.focusField = FocusNameInput
+				c.updateFocus()
+				return c, nil
+			default:
+				// Pass all other keys to text input
+				fields.uriInput, cmd = fields.uriInput.Update(msg)
+				return c, cmd
+			}
+		}
+
 		if c.focusField == FocusDriverSelect {
 			switch msg.String() {
 			case "esc":
@@ -313,9 +438,12 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 				return c, nil
 			case "tab", "down":
 				// For SQLite, skip to database input (file path)
-				// For MySQL/PostgreSQL, go to host input
+				// For MongoDB Atlas, go to URI input
+				// For others, go to host input
 				if c.GetDriver() == drivers.DriverTypeSQLite {
 					c.focusField = FocusDatabaseInput
+				} else if c.GetDriver() == drivers.DriverTypeMongoDBAtlas {
+					c.focusField = FocusUriInput
 				} else {
 					c.focusField = FocusHostInput
 				}
@@ -467,6 +595,12 @@ func (c *Content) updateFocus() {
 	} else {
 		fields.databaseInput.Blur()
 	}
+
+	if c.focusField == FocusUriInput {
+		fields.uriInput.Focus()
+	} else {
+		fields.uriInput.Blur()
+	}
 }
 
 func (c *Content) View() string {
@@ -556,8 +690,15 @@ func (c *Content) View() string {
 	if c.GetDriver() == drivers.DriverTypeSQLite {
 		// For SQLite, show the database input as file path
 		databaseRow = renderField("Path", fields.databaseInput, c.focusField == FocusDatabaseInput)
+	} else if c.GetDriver() == drivers.DriverTypeMongoDBAtlas {
+		// For MongoDB Atlas, only show URI input
+		hostRow = renderField("Connection URI", fields.uriInput, c.focusField == FocusUriInput)
+		portRow = ""
+		usernameRow = ""
+		passwordRow = ""
+		databaseRow = ""
 	} else {
-		// For MySQL and PostgreSQL, show all fields
+		// For MySQL, PostgreSQL, and MongoDB, show all fields
 		hostRow = renderField("Host", fields.hostInput, c.focusField == FocusHostInput)
 		portRow = renderField("Port", fields.portInput, c.focusField == FocusPortInput)
 		usernameRow = renderField("Username", fields.usernameInput, c.focusField == FocusUsernameInput)
@@ -604,7 +745,11 @@ func (c *Content) View() string {
 
 	if c.GetDriver() == drivers.DriverTypeSQLite {
 		content = append(content, databaseRow)
+	} else if c.GetDriver() == drivers.DriverTypeMongoDBAtlas {
+		// MongoDB Atlas - only URI input
+		content = append(content, hostRow)
 	} else {
+		// MySQL, PostgreSQL, and MongoDB standard - all fields
 		content = append(content, hostRow, portRow, usernameRow, passwordRow, databaseRow)
 	}
 
@@ -688,6 +833,15 @@ func (c *Content) BuildConnectionString() string {
 			return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", username, password, host, port, database)
 		}
 		return fmt.Sprintf("postgres://%s@%s:%s/%s?sslmode=disable", username, host, port, database)
+	} else if driver == drivers.DriverTypeMongoDB {
+		// MongoDB URL format: mongodb://user:password@host:port/database
+		if password != "" {
+			return fmt.Sprintf("mongodb://%s:%s@%s:%s/%s", username, password, host, port, database)
+		}
+		return fmt.Sprintf("mongodb://%s@%s:%s/%s", username, host, port, database)
+	} else if driver == drivers.DriverTypeMongoDBAtlas {
+		// MongoDB Atlas uses direct URI input
+		return fields.uriInput.Value()
 	}
 
 	return ""
@@ -723,6 +877,16 @@ func (c *Content) Reset() {
 
 	c.sqliteFields.nameInput.SetValue("")
 	c.sqliteFields.databaseInput.SetValue("")
+
+	c.mongodbFields.nameInput.SetValue("")
+	c.mongodbFields.hostInput.SetValue("localhost")
+	c.mongodbFields.portInput.SetValue("27017")
+	c.mongodbFields.usernameInput.SetValue("")
+	c.mongodbFields.passwordInput.SetValue("")
+	c.mongodbFields.databaseInput.SetValue("")
+
+	c.mongodbAtlasFields.nameInput.SetValue("")
+	c.mongodbAtlasFields.uriInput.SetValue("")
 
 	c.getCurrentFields().nameInput.Focus()
 }

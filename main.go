@@ -21,7 +21,7 @@ func main() {
 
 	// Connection creation flags
 	createConnFlag := flag.Bool("create-connection", false, "Create a new database connection")
-	connDriver := flag.String("driver", drivers.DriverTypeMySQL, "Database driver (mysql, postgresql, sqlite)")
+	connDriver := flag.String("driver", drivers.DriverTypeMySQL, "Database driver (mysql, postgresql, sqlite, mongodb, mongodb-atlas)")
 	connName := flag.String("name", "", "Connection name")
 	connHost := flag.String("host", "localhost", "Database host")
 	connPort := flag.String("port", "3306", "Database port")
@@ -83,12 +83,14 @@ func main() {
 func handleCreateConnection(driver, name, host, port, user, password, database string) error {
 	// Validate driver
 	supportedDrivers := map[string]bool{
-		drivers.DriverTypeMySQL:      true,
-		drivers.DriverTypePostgreSQL: true,
-		drivers.DriverTypeSQLite:     true,
+		drivers.DriverTypeMySQL:        true,
+		drivers.DriverTypePostgreSQL:   true,
+		drivers.DriverTypeSQLite:       true,
+		drivers.DriverTypeMongoDB:      true,
+		drivers.DriverTypeMongoDBAtlas: true,
 	}
 	if !supportedDrivers[driver] {
-		return fmt.Errorf("unsupported driver: %s (supported: mysql, postgresql, sqlite)", driver)
+		return fmt.Errorf("unsupported driver: %s (supported: mysql, postgresql, sqlite, mongodb, mongodb-atlas)", driver)
 	}
 
 	// Validate required fields
@@ -102,8 +104,8 @@ func handleCreateConnection(driver, name, host, port, user, password, database s
 	// Validate driver-specific fields
 	if driver == drivers.DriverTypeSQLite {
 		// SQLite only needs name and file path
-	} else if driver == drivers.DriverTypeMySQL || driver == drivers.DriverTypePostgreSQL {
-		// MySQL and PostgreSQL need user and database
+	} else if driver == drivers.DriverTypeMySQL || driver == drivers.DriverTypePostgreSQL || driver == drivers.DriverTypeMongoDB || driver == drivers.DriverTypeMongoDBAtlas {
+		// MySQL, PostgreSQL, MongoDB, and MongoDB Atlas need user and database
 		if user == "" {
 			return fmt.Errorf("database user is required (--user)")
 		}
@@ -138,6 +140,20 @@ func handleCreateConnection(driver, name, host, port, user, password, database s
 	case drivers.DriverTypeSQLite:
 		// SQLite URL format: sqlite:///path/to/database.db
 		url = fmt.Sprintf("sqlite://%s", database)
+	case drivers.DriverTypeMongoDB:
+		// MongoDB URL format: mongodb://user:pass@host:port/database
+		if password == "" {
+			url = fmt.Sprintf("mongodb://%s@%s:%s/%s", user, host, port, database)
+		} else {
+			url = fmt.Sprintf("mongodb://%s:%s@%s:%s/%s", user, password, host, port, database)
+		}
+	case drivers.DriverTypeMongoDBAtlas:
+		// MongoDB Atlas URL format: mongodb+srv://user:pass@cluster/database
+		if password == "" {
+			url = fmt.Sprintf("mongodb+srv://%s@%s/%s", user, host, database)
+		} else {
+			url = fmt.Sprintf("mongodb+srv://%s:%s@%s/%s", user, password, host, database)
+		}
 	}
 
 	// Create connection (this will test the connection before saving)
