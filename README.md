@@ -4,7 +4,7 @@ A keyboard-first SQL TUI built for VIM users [Bubble Tea](https://github.com/cha
 It focuses on speed, clarity, and terminal-native workflows—no mouse,
 no clutter, just efficient querying inside terminal but with the beautifull UI
 
-**Status**: Active development - MySQL support available with full CRUD operations, foreign key navigation, pagination, and SQL query editor.
+**Status**: Active development - MySQL and PostgreSQL support available with full CRUD operations, foreign key navigation, pagination, and SQL query editor.
 
 ## Demo
 
@@ -43,25 +43,48 @@ sq --create-connection       # Create a new database connection
 ## Features
 
 ### Current Features
-- Multi-pane layout with sidebar (connections/tables), tabbed table views, and filter dialog
-- MySQL database connection support
+
+**Database Support:**
+- MySQL database connections with full feature support
+- PostgreSQL database connections with full feature support
+- Multiple simultaneous connections in sidebar
+- Persistent connection storage
+
+**Data Browsing:**
+- Table listing with automatic refresh
+- Data viewing with pagination (100 rows per page by default)
+- Efficient handling of large datasets
+- Cell-level data preview with `p` key
+- Copy cell data to clipboard with `y` key
+
+**Advanced Features:**
 - **Query Editor** with vim-mode support for writing and executing custom SQL queries
-  - SQL syntax highlighting
-  - SQL formatting with `Ctrl+F`
+  - SQL syntax highlighting (Chroma v2)
+  - SQL formatting with `Ctrl+F` (sqlfmt integration)
   - Multi-line query support
-- Tabbed interface for multiple tables/queries
-- Table structure viewer (columns, indexes, relations, triggers)
+  - Query execution with F5 or Ctrl+E
+- **Table Structure Viewer** - View columns, indexes, relations, and triggers
+  - Column information (type, nullable, default values)
+  - Index information (unique, primary, type)
+  - Foreign key relationships
+  - Triggers and their definitions
+
+**Navigation & Filtering:**
 - **Foreign Key Navigation** - Jump to related tables with `gd` (goto definition)
-- **Pagination** - Efficient handling of large datasets with configurable page sizes
-- Vim-like keyboard navigation throughout
-- Theme switching (default, dracula, nord, gruvbox, tokyo-night, catppuccin, monokai)
-- Cell preview and yank (copy) functionality
-- Filter dialogs for advanced querying with multiple filter support
-- Collapsible sidebar
-- Built-in help modal with `?` key
+- **Advanced Filtering** - Multi-condition filter dialog with column/operator/value selection
+- Vim-like keyboard navigation (hjkl movement, gg/G jump, w/b word movement)
+- Tabbed interface for multiple tables/queries
+- Collapsible sidebar to maximize table view space
+
+**UI & Theming:**
+- 7 built-in themes (default, dracula, nord, gruvbox, tokyo-night, catppuccin, monokai)
+- Real-time theme switching with `T` key
+- Multi-pane layout with sidebar, table view, and filter dialog
+- Built-in help modal accessible with `?` key
+- Responsive design that adapts to terminal size
 
 ### Planned Features
-- PostgreSQL and SQLite support
+- SQLite support
 - Detail pane for selected records
 - Edit/insert/delete operations
 - Query history
@@ -216,6 +239,7 @@ sq/
 ├── drivers/             # Database drivers
 │   ├── driver.go        # Driver interface definition
 │   ├── mysql.go         # MySQL driver implementation (with pagination support)
+│   ├── postgres.go      # PostgreSQL driver implementation (with pagination support)
 │   └── types.go         # Shared types (TableStructure, ColumnInfo, Pagination, etc.)
 ├── logger/              # Logging utilities
 ├── storage/             # Connection storage utilities
@@ -265,8 +289,39 @@ Available themes: default, dracula, nord, gruvbox, tokyo-night, catppuccin, mono
 
 Connections are stored in `~/.config/sq/storage.db`.
 
+### Quick Start - Creating Your First Connection
+
+1. Launch the application:
+   ```bash
+   ./sq
+   ```
+
+2. Press `n` to create a new connection
+
+3. Select your database driver (MySQL or PostgreSQL)
+
+4. Enter your connection details:
+   - **Name**: A descriptive name for this connection (e.g., "Production DB")
+   - **Host**: Database server address (default: localhost)
+   - **Port**: Database port (MySQL: 3306, PostgreSQL: 5432)
+   - **Username**: Database user (MySQL: root, PostgreSQL: postgres)
+   - **Password**: User password
+   - **Database**: Database name to connect to
+
+5. Press `Enter` to test the connection and save it
+
+6. Once saved, your connection appears in the sidebar and can be selected with `Enter`
+
 ### Supported Databases
 - **MySQL** - Full support including:
+  - Table browsing and data viewing with pagination
+  - Table structure (columns, indexes, relations, triggers)
+  - Foreign key navigation (goto definition)
+  - Custom SQL query execution with syntax highlighting and formatting
+  - Filtering with multiple conditions
+  - Connection persistence
+
+- **PostgreSQL** - Full support including:
   - Table browsing and data viewing with pagination
   - Table structure (columns, indexes, relations, triggers)
   - Foreign key navigation (goto definition)
@@ -281,9 +336,77 @@ Connections are stored in `~/.config/sq/storage.db`.
 mysql://user:password@tcp(host:port)/database
 ```
 
-## Debugging
+Example:
+```
+mysql://root:password@tcp(localhost:3306)/mydb
+```
+
+**PostgreSQL:**
+```
+postgres://user:password@host:port/database?sslmode=disable
+```
+
+Example:
+```
+postgres://postgres:password@localhost:5432/mydb?sslmode=disable
+```
+
+#### PostgreSQL Schema Support
+
+sq automatically detects and uses the appropriate schema:
+
+1. **Priority Order**:
+   - First, checks if the `public` schema exists and uses it
+   - If `public` doesn't exist, uses the first user-created schema found
+   - Falls back to `public` if detection fails
+
+2. **Schema Detection**:
+   - Automatically excludes PostgreSQL system schemas (`pg_catalog`, `information_schema`, `pg_toast`)
+   - Selects the first user-accessible schema alphabetically
+   - Detection happens automatically on connection
+
+3. **Current Limitations**:
+   - Only one schema is supported per connection
+   - Tables from multiple schemas cannot be viewed simultaneously
+   - To work with tables in different schemas, create separate connections for each schema
+
+If you need to work with a specific non-public schema, the schema is automatically detected on connection. If detection doesn't find your schema, ensure:
+- The schema exists in the database
+- Your user has permissions to access it
+- The schema is not a PostgreSQL system schema
+
+## Troubleshooting
+
+### Connection Issues
+
+**Error: "invalid database scheme"**
+- Make sure you're using the correct URI format for your database type
+- MySQL: `mysql://user:password@host:port/database`
+- PostgreSQL: `postgres://user:password@host:port/database?sslmode=disable`
+
+**PostgreSQL: "relation not found"**
+- Check that your tables exist in the detected schema (see logs for which schema was selected)
+- Verify the table names match exactly (PostgreSQL is case-sensitive for unquoted identifiers)
+- If using a non-public schema, ensure:
+  - The schema exists in your database
+  - Your user has SELECT permissions on the schema
+  - The schema is not a PostgreSQL system schema (`pg_catalog`, `information_schema`, `pg_toast`)
+- Check `debug.log` to see which schema was automatically detected
+
+**Connection refused**
+- Check that the database server is running and accessible
+- Verify host and port are correct
+- Check firewall rules if connecting to remote servers
+- Ensure username and password are correct
+
+### Debugging
 
 Debug logs are written to `debug.log` in the current directory. This can be helpful for troubleshooting connection issues or unexpected behavior.
+
+To enable detailed logging:
+1. Check the `debug.log` file in your current directory after launching sq
+2. Look for error messages related to your specific operation
+3. Common issues like schema problems, query errors, and connection failures are logged here
 
 ## Contributing
 

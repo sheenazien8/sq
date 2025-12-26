@@ -4,7 +4,7 @@
 
 **sq** is a terminal-based database client built with the [Bubble Tea](https://github.com/charmbracelet/bubbletea) TUI framework for Go. The project implements a multi-pane layout with keyboard-driven navigation following vim-like patterns.
 
-**Status**: Active development - MySQL support available with full CRUD operations, foreign key navigation, pagination, and SQL query editor.
+**Status**: Active development - MySQL and PostgreSQL support available with full CRUD operations, foreign key navigation, pagination, and SQL query editor.
 
 **Technology Stack**:
 - Go 1.22
@@ -52,6 +52,7 @@ sq/
 ├── drivers/             # Database drivers
 │   ├── driver.go        # Driver interface definition
 │   ├── mysql.go         # MySQL driver with pagination and foreign key support
+│   ├── postgres.go      # PostgreSQL driver with pagination and foreign key support
 │   └── types.go         # Shared types (TableStructure, ColumnInfo, Pagination, etc.)
 ├── logger/              # Logging utilities
 ├── storage/             # Connection storage utilities
@@ -585,6 +586,58 @@ m.Tabs.SetActiveTabPagination(result.Page, result.PageSize, result.TotalRows, re
 - `K` key decrements page and re-queries
 - Pagination info shown in table footer: "Page 2/10 (100 rows/page)"
 
+### PostgreSQL Schema Support Pattern
+
+PostgreSQL driver automatically detects and selects the appropriate schema on connection:
+
+```go
+// drivers/postgres.go
+type PostgreSQL struct {
+    Connection *sql.DB
+    Provider   string
+    Schema     string // Automatically detected schema
+}
+
+// detectSchema attempts to find an appropriate schema to use
+// Priority: public schema > first user-created schema > fallback to public
+func (db *PostgreSQL) detectSchema() error {
+    // First, try to use the public schema
+    query := `SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'public'`
+    var schemaName string
+    err := db.Connection.QueryRow(query).Scan(&schemaName)
+    if err == nil {
+        db.Schema = "public"
+        return nil
+    }
+
+    // If public doesn't exist, find user-created schemas (exclude system schemas)
+    query = `SELECT schema_name FROM information_schema.schemata 
+        WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast') 
+        ORDER BY schema_name LIMIT 1`
+    err = db.Connection.QueryRow(query).Scan(&schemaName)
+    if err == nil {
+        db.Schema = schemaName
+        return nil
+    }
+
+    // Fallback: use public
+    db.Schema = "public"
+    return nil
+}
+```
+
+**Schema Detection Logic**:
+1. On `Connect()`, automatically calls `detectSchema()`
+2. Checks for `public` schema first (most common)
+3. If `public` doesn't exist, finds first user-created schema
+4. Excludes PostgreSQL system schemas (`pg_catalog`, `information_schema`, `pg_toast`)
+5. Falls back to `public` if detection fails
+
+**All queries use the detected schema**:
+- Table queries: `SELECT * FROM "schema"."table"`
+- Metadata queries: `WHERE table_schema = $1` with `db.Schema` parameter
+- This allows working with non-public schemas automatically
+
 ### Foreign Key Navigation Pattern
 
 Foreign keys are detected and stored with column metadata:
@@ -784,7 +837,9 @@ middleSection := lipgloss.JoinHorizontal(lipgloss.Top,
 
 ### Database & SQL
 - `github.com/go-sql-driver/mysql` - MySQL database driver
+- `github.com/lib/pq` - PostgreSQL database driver
 - `github.com/ktr0731/go-sqlfmt` - SQL formatting library
+- `github.com/xo/dburl` - Database URL parsing (supports multiple database types)
 
 ### Syntax Highlighting
 - `github.com/alecthomas/chroma/v2` - Syntax highlighting engine
@@ -808,7 +863,7 @@ go mod tidy
 From README.md and codebase structure:
 
 **Planned Features**:
-- [ ] PostgreSQL and SQLite support
+- [ ] SQLite support
 - [ ] Detail pane for selected row
 - [ ] Edit/insert/delete operations with confirmation
 - [ ] Query history and saved queries
@@ -818,6 +873,7 @@ From README.md and codebase structure:
 - [ ] Multi-database queries
 
 **Recently Completed**:
+- [x] PostgreSQL database support with full feature parity with MySQL
 - [x] MySQL database connection management
 - [x] Query editor with vim-mode
 - [x] SQL syntax highlighting and formatting

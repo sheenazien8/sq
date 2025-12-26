@@ -128,10 +128,6 @@ func createTables() error {
 	return err
 }
 
-// =============================================================================
-// Connection CRUD operations
-// =============================================================================
-
 // CreateConnection creates a new connection and returns its ID
 // It tests the connection before saving to ensure it's valid
 func CreateConnection(name, driverName, url string) (int64, error) {
@@ -141,6 +137,8 @@ func CreateConnection(name, driverName, url string) (int64, error) {
 	switch driverName {
 	case drivers.DriverMySQL:
 		driver = &drivers.MySQL{}
+	case drivers.DriverPostgreSQL:
+		driver = &drivers.PostgreSQL{}
 	default:
 		return 0, fmt.Errorf("unsupported driver: %s", driverName)
 	}

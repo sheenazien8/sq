@@ -645,7 +645,7 @@ func getConnectionIcon(dbType string) string {
 	switch dbType {
 	case "mysql":
 		return "[M]"
-	case "postgres":
+	case "postgresql":
 		return "[P]"
 	case "sqlite":
 		return "[S]"
