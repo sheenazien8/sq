@@ -44,8 +44,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Sidebar is updated via updateSidebarConnection
-
 		return m, nil
 
 	case queryeditor.CellPreviewMsg:
@@ -736,6 +734,8 @@ func (m *Model) connectToDatabase(name, connType, url string) error {
 	switch connType {
 	case "mysql":
 		driver = &drivers.MySQL{}
+	case "postgresql":
+		driver = &drivers.PostgreSQL{}
 	default:
 		return fmt.Errorf("unsupported database type: %s", connType)
 	}
@@ -757,8 +757,19 @@ func (m *Model) connectToDatabase(name, connType, url string) error {
 	// Store the driver connection
 	m.dbConnections[name] = driver
 
+	// Combine all tables from all schemas for display
+	// In PostgreSQL, tables are organized by schema in the returned map
+	// In MySQL, tables are keyed by database name
+	var allTables []string
+	for key, schemaTables := range tables {
+		// For PostgreSQL, all schemas will be keys; for MySQL, dbName will be key
+		if key == dbName || key != dbName { // Accept all schema keys for PostgreSQL
+			allTables = append(allTables, schemaTables...)
+		}
+	}
+
 	// Update sidebar with real tables and connected status
-	m.Sidebar.UpdateConnection(name, tables[dbName], true)
+	m.Sidebar.UpdateConnection(name, allTables, true)
 
 	return nil
 }
@@ -767,7 +778,15 @@ func (m *Model) connectToDatabase(name, connType, url string) error {
 func extractDatabaseName(url, connType string) string {
 	switch connType {
 	case "mysql":
-		// For MySQL URLs like "user:pass@tcp(host:port)/database"
+		// For MySQL URLs like "mysql://user:pass@host:port/database"
+		parts := strings.Split(url, "/")
+		if len(parts) > 1 {
+			// Remove query parameters if any
+			dbPart := strings.Split(parts[len(parts)-1], "?")[0]
+			return dbPart
+		}
+	case "postgresql":
+		// For PostgreSQL URLs like "postgres://user:pass@host:port/database?sslmode=disable"
 		parts := strings.Split(url, "/")
 		if len(parts) > 1 {
 			// Remove query parameters if any

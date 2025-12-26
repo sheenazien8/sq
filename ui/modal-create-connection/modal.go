@@ -124,7 +124,7 @@ func (c *Content) createDriver() (drivers.Driver, error) {
 	case drivers.DriverMySQL:
 		return &drivers.MySQL{}, nil
 	case drivers.DriverPostgreSQL:
-		return nil, fmt.Errorf("PostgreSQL support is not yet implemented")
+		return &drivers.PostgreSQL{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported driver: %s", c.GetDriver())
 	}
@@ -592,10 +592,11 @@ func (c *Content) BuildConnectionString() string {
 		}
 		return fmt.Sprintf("mysql://%s@%s:%s/%s", username, host, port, database)
 	} else if driver == drivers.DriverPostgreSQL {
-		// PostgreSQL connection string format
-		connStr := fmt.Sprintf("host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
-			host, port, username, password, database)
-		return connStr
+		// PostgreSQL URL format: postgres://user:password@host:port/database?sslmode=disable
+		if password != "" {
+			return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", username, password, host, port, database)
+		}
+		return fmt.Sprintf("postgres://%s@%s:%s/%s?sslmode=disable", username, host, port, database)
 	}
 
 	return ""
