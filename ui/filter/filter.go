@@ -30,6 +30,10 @@ type Model struct {
 	// Current filter
 	currentFilter *Filter
 
+	// Error handling
+	errorMessage string // Error message to display
+	showError    bool   // Whether to show error message
+
 	// Word completion state
 	currentWord string
 	wordStart   int // Position where current word starts
@@ -143,22 +147,50 @@ func (m *Model) Clear() {
 	m.filterInput.SetValue("")
 	m.currentFilter = nil
 	m.active = false
+	m.ClearError()
+}
+
+// SetError sets an error message for the filter
+func (m *Model) SetError(msg string) {
+	m.errorMessage = msg
+	m.showError = true
+}
+
+// ClearError clears the error message
+func (m *Model) ClearError() {
+	m.errorMessage = ""
+	m.showError = false
+}
+
+// HasError returns true if there's an error message
+func (m Model) HasError() bool {
+	return m.showError && m.errorMessage != ""
+}
+
+// GetError returns the current error message
+func (m Model) GetError() string {
+	return m.errorMessage
 }
 
 // Apply applies the current filter settings
-func (m *Model) Apply() {
+func (m *Model) Apply() error {
 	input := strings.TrimSpace(m.filterInput.Value())
 	if input == "" {
 		m.active = false
 		m.currentFilter = nil
-		return
+		m.ClearError()
+		return nil
 	}
+
+	// Clear any previous errors when applying
+	m.ClearError()
 
 	// Store the raw WHERE clause directly - user is responsible for proper SQL syntax
 	m.currentFilter = &Filter{
 		WhereClause: input,
 	}
 	m.active = true
+	return nil
 }
 
 // Update handles input

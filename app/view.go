@@ -39,6 +39,11 @@ func (m Model) View() string {
 		return "Loading..."
 	}
 
+	// Toast modal has highest priority display
+	if m.Toast.Visible() {
+		return m.Toast.View()
+	}
+
 	if m.ExitModal.Visible() {
 		return m.ExitModal.View()
 	}

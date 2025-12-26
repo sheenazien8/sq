@@ -11,6 +11,7 @@ import (
 	"github.com/sheenazien8/sq/ui/tab"
 	"github.com/sheenazien8/sq/ui/table"
 	"github.com/sheenazien8/sq/ui/theme"
+	"github.com/sheenazien8/sq/ui/toast"
 )
 
 // Re-export table types for convenience
@@ -28,6 +29,7 @@ const (
 	FocusCreateConnectionModal
 	FocusCellPreviewModal
 	FocusHelpModal
+	FocusToastModal
 )
 
 type Model struct {
@@ -38,6 +40,7 @@ type Model struct {
 	CreateConnectionModal modalcreateconnection.Model
 	CellPreviewModal      modalcellpreview.Model
 	HelpModal             modalhelp.Model
+	Toast                 toast.Model
 	Focus                 Focus
 
 	allRows     []table.Row
@@ -106,6 +109,7 @@ func New() Model {
 	cellPreviewModal := modalcellpreview.New()
 	helpModal := modalhelp.New()
 	tabs := tab.New()
+	toastNotif := toast.New()
 
 	return Model{
 		Sidebar:               s,
@@ -114,6 +118,7 @@ func New() Model {
 		CreateConnectionModal: createConnectionModal,
 		CellPreviewModal:      cellPreviewModal,
 		HelpModal:             helpModal,
+		Toast:                 toastNotif,
 		Focus:                 FocusSidebar,
 		dbConnections:         make(map[string]drivers.Driver),
 		themeIndex:            themeIdx,

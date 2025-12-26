@@ -40,7 +40,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				"connection": msg.ConnectionName,
 				"error":      err.Error(),
 			})
-			// TODO: Show error message to user
+			// Show error message to user via toast modal
+			m.Toast.ShowError("Failed to connect to database: " + err.Error())
+			m.Focus = FocusToastModal
+			m = m.updateFooter()
 			return m, nil
 		}
 
@@ -194,6 +197,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		activeDB := m.Sidebar.ActiveDatabase()
 		if activeDB == nil {
 			logger.Error("No active database", map[string]any{})
+			m.Toast.ShowError("No active database selected")
+			m.Focus = FocusToastModal
+			m = m.updateFooter()
 			return m, nil
 		}
 
@@ -205,7 +211,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				"table":      msg.TableName,
 				"error":      err.Error(),
 			})
-			// TODO: Show error message to user
+			// Show error message to user via toast modal
+			m.Toast.ShowError("Failed to load table: " + err.Error())
+			m.Focus = FocusToastModal
+			m = m.updateFooter()
 			return m, nil
 		}
 
@@ -292,8 +301,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.CreateConnectionModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 		m.CellPreviewModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 		m.HelpModal.SetSize(m.TerminalWidth, m.TerminalHeight)
+		m.Toast.SetSize(m.TerminalWidth, m.TerminalHeight)
 
 	case tea.KeyMsg:
+		// Handle toast modal first (highest priority)
+		if m.Toast.Visible() {
+			m.Toast, cmd = m.Toast.Update(msg)
+			cmds = append(cmds, cmd)
+
+			// Check if toast was closed
+			if !m.Toast.Visible() {
+				m.Focus = FocusSidebar
+				m.Sidebar.SetFocused(true)
+				m = m.updateFooter()
+			}
+			return m, tea.Batch(cmds...)
+		}
+
 		if m.ExitModal.Visible() {
 			m.ExitModal, cmd = m.ExitModal.Update(msg)
 			cmds = append(cmds, cmd)
@@ -874,6 +898,9 @@ func (m Model) applyFilterToActiveTab() Model {
 	parts := strings.Split(tabName, ".")
 	if len(parts) != 2 {
 		logger.Error("Invalid tab name format", map[string]any{"tab": tabName})
+		m.Toast.ShowError("Invalid table name format")
+		m.Focus = FocusToastModal
+		m = m.updateFooter()
 		return m
 	}
 
@@ -883,6 +910,9 @@ func (m Model) applyFilterToActiveTab() Model {
 	driver, exists := m.dbConnections[connectionName]
 	if !exists {
 		logger.Error("No active connection", map[string]any{"connection": connectionName})
+		m.Toast.ShowError("No active connection: " + connectionName)
+		m.Focus = FocusToastModal
+		m = m.updateFooter()
 		return m
 	}
 
@@ -898,6 +928,9 @@ func (m Model) applyFilterToActiveTab() Model {
 
 	if dbName == "" {
 		logger.Error("Could not extract database name", map[string]any{})
+		m.Toast.ShowError("Could not extract database name")
+		m.Focus = FocusToastModal
+		m = m.updateFooter()
 		return m
 	}
 
@@ -935,6 +968,10 @@ func (m Model) applyFilterToActiveTab() Model {
 		logger.Error("Failed to load filtered data", map[string]any{
 			"error": err.Error(),
 		})
+		// Show error as toast modal only
+		m.Toast.ShowError("Filter error: " + err.Error())
+		m.Focus = FocusToastModal
+		m = m.updateFooter()
 		return m
 	}
 
@@ -991,6 +1028,8 @@ func (m Model) updateTabSize() Model {
 // getFooterHelp returns context-sensitive help text based on current focus
 func (m Model) getFooterHelp() string {
 	switch m.Focus {
+	case FocusToastModal:
+		return "Enter/Esc/Q: Close notification"
 	case FocusSidebar:
 		return "?: Help | j/k: Navigate | Enter: Select | e: Query | n: New | /: Filter | Tab: Switch | q: Quit"
 	case FocusMain:
