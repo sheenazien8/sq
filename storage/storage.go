@@ -135,10 +135,12 @@ func CreateConnection(name, driverName, url string) (int64, error) {
 	var driver drivers.Driver
 
 	switch driverName {
-	case drivers.DriverMySQL:
+	case drivers.DriverTypeMySQL:
 		driver = &drivers.MySQL{}
-	case drivers.DriverPostgreSQL:
+	case drivers.DriverTypePostgreSQL:
 		driver = &drivers.PostgreSQL{}
+	case drivers.DriverTypeSQLite:
+		driver = &drivers.SQLite{}
 	default:
 		return 0, fmt.Errorf("unsupported driver: %s", driverName)
 	}
@@ -370,8 +372,12 @@ func Connect(conn *Connection) (drivers.Driver, error) {
 	var driver drivers.Driver
 
 	switch conn.Driver {
-	case drivers.DriverMySQL:
+	case drivers.DriverTypeMySQL:
 		driver = &drivers.MySQL{}
+	case drivers.DriverTypePostgreSQL:
+		driver = &drivers.PostgreSQL{}
+	case drivers.DriverTypeSQLite:
+		driver = &drivers.SQLite{}
 	default:
 		return nil, fmt.Errorf("unsupported driver: %s", conn.Driver)
 	}
@@ -393,8 +399,12 @@ func TestConnectionByID(id int64) error {
 	var driver drivers.Driver
 
 	switch conn.Driver {
-	case drivers.DriverMySQL:
+	case drivers.DriverTypeMySQL:
 		driver = &drivers.MySQL{}
+	case drivers.DriverTypePostgreSQL:
+		driver = &drivers.PostgreSQL{}
+	case drivers.DriverTypeSQLite:
+		driver = &drivers.SQLite{}
 	default:
 		return fmt.Errorf("unsupported driver: %s", conn.Driver)
 	}
