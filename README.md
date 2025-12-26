@@ -4,7 +4,7 @@ A keyboard-first SQL TUI built for VIM users [Bubble Tea](https://github.com/cha
 It focuses on speed, clarity, and terminal-native workflows—no mouse,
 no clutter, just efficient querying inside terminal but with the beautifull UI
 
-**Status**: Active development - MySQL, PostgreSQL, and SQLite support available with full CRUD operations, foreign key navigation, pagination, and SQL query editor.
+**Status**: Active development - MySQL, PostgreSQL, SQLite, MongoDB, and MongoDB Atlas support available with full CRUD operations, foreign key navigation, pagination, and SQL query editor.
 
 ## Demo
 
@@ -48,6 +48,8 @@ sq --create-connection       # Create a new database connection
 - MySQL database connections with full feature support
 - PostgreSQL database connections with full feature support
 - SQLite database file connections with full feature support
+- MongoDB database connections with full feature support (local and remote)
+- MongoDB Atlas cloud connections with full feature support
 - Multiple simultaneous connections in sidebar
 - Persistent connection storage
 
@@ -85,10 +87,10 @@ sq --create-connection       # Create a new database connection
 - Responsive design that adapts to terminal size
 
 ### Planned Features
-- SQLite support
-- Detail pane for selected records
 - Edit/insert/delete operations
 - Query history
+- Detail pane for selected records
+- Export data (CSV, JSON)
 
 ## Usage
 
@@ -241,6 +243,8 @@ sq/
 │   ├── driver.go        # Driver interface definition
 │   ├── mysql.go         # MySQL driver implementation (with pagination support)
 │   ├── postgres.go      # PostgreSQL driver implementation (with pagination support)
+│   ├── sqlite.go        # SQLite driver implementation
+│   ├── mongodb.go       # MongoDB driver implementation (standard and Atlas support)
 │   └── types.go         # Shared types (TableStructure, ColumnInfo, Pagination, etc.)
 ├── logger/              # Logging utilities
 ├── storage/             # Connection storage utilities
@@ -293,25 +297,37 @@ Connections are stored in `~/.config/sq/storage.db`.
 ### Quick Start - Creating Your First Connection
 
 1. Launch the application:
-   ```bash
-   ./sq
-   ```
+    ```bash
+    ./sq
+    ```
 
 2. Press `n` to create a new connection
 
-3. Select your database driver (MySQL or PostgreSQL)
+3. Select your database driver (MySQL, PostgreSQL, SQLite, MongoDB, or MongoDB Atlas)
 
-4. Enter your connection details:
-   - **Name**: A descriptive name for this connection (e.g., "Production DB")
-   - **Host**: Database server address (default: localhost)
-   - **Port**: Database port (MySQL: 3306, PostgreSQL: 5432)
-   - **Username**: Database user (MySQL: root, PostgreSQL: postgres)
-   - **Password**: User password
-   - **Database**: Database name to connect to
+4. **For MySQL/PostgreSQL/SQLite**, enter your connection details:
+    - **Name**: A descriptive name for this connection (e.g., "Production DB")
+    - **Host**: Database server address (default: localhost)
+    - **Port**: Database port (MySQL: 3306, PostgreSQL: 5432)
+    - **Username**: Database user (MySQL: root, PostgreSQL: postgres)
+    - **Password**: User password
+    - **Database**: Database name to connect to
 
-5. Press `Enter` to test the connection and save it
+5. **For MongoDB**, enter:
+    - **Name**: A descriptive name for this connection
+    - **Host**: MongoDB server address (default: localhost)
+    - **Port**: MongoDB port (default: 27017)
+    - **Username**: Database user (optional)
+    - **Password**: User password (optional)
+    - **Database**: Database name to connect to
 
-6. Once saved, your connection appears in the sidebar and can be selected with `Enter`
+6. **For MongoDB Atlas**, paste your connection URI:
+    - **Name**: A descriptive name for this connection
+    - **Connection URI**: Full MongoDB connection string (e.g., `mongodb+srv://user:pass@cluster.mongodb.net/database`)
+
+7. Press `Enter` to test the connection and save it
+
+8. Once saved, your connection appears in the sidebar and can be selected with `Enter`
 
 ### Supported Databases
 - **MySQL** - Full support including:
@@ -323,12 +339,26 @@ Connections are stored in `~/.config/sq/storage.db`.
   - Connection persistence
 
 - **PostgreSQL** - Full support including:
-  - Table browsing and data viewing with pagination
-  - Table structure (columns, indexes, relations, triggers)
-  - Foreign key navigation (goto definition)
-  - Custom SQL query execution with syntax highlighting and formatting
-  - Filtering with multiple conditions
-  - Connection persistence
+   - Table browsing and data viewing with pagination
+   - Table structure (columns, indexes, relations, triggers)
+   - Foreign key navigation (goto definition)
+   - Custom SQL query execution with syntax highlighting and formatting
+   - Filtering with multiple conditions
+   - Connection persistence
+
+- **MongoDB** - Full support including:
+   - Collection browsing and document viewing with pagination
+   - Collection structure (field analysis from samples)
+   - Efficient filtering with JSON and simple syntax
+   - ObjectId filtering support
+   - Both self-hosted and MongoDB Atlas cloud connections
+   - Connection persistence
+
+- **MongoDB Atlas** - Cloud database support including:
+   - Direct connection string URI input
+   - Automatic database detection
+   - Full feature parity with standard MongoDB
+   - Optimized for cloud connections
 
 ### Connection URL Format
 
@@ -350,6 +380,45 @@ postgres://user:password@host:port/database?sslmode=disable
 Example:
 ```
 postgres://postgres:password@localhost:5432/mydb?sslmode=disable
+```
+
+**MongoDB:**
+```
+mongodb://user:password@host:port/database
+```
+
+Example:
+```
+mongodb://localhost:27017/mydb
+mongodb://admin:password@localhost:27017/mydb
+```
+
+**MongoDB Atlas:**
+```
+mongodb+srv://user:password@cluster.mongodb.net/database?retryWrites=true&w=majority
+```
+
+Example:
+```
+mongodb+srv://admin:securepassword@cluster-name-abc.mongodb.net/mydatabase?retryWrites=true&w=majority
+```
+
+### MongoDB Filtering
+
+MongoDB supports two filter syntaxes:
+
+**Simple Syntax** (recommended for basic queries):
+```
+fieldname=value                 # Match a field
+_id=507f1f77bcf86cd799439011  # Match by ObjectId
+age=25,status=active           # Multiple conditions (AND)
+```
+
+**JSON Syntax** (for advanced queries):
+```
+{"age": {"$gt": 25}}           # Greater than
+{"status": {"$in": ["a", "b"]}}  # In array
+{"_id": {"$exists": true}}     # Field exists
 ```
 
 #### PostgreSQL Schema Support
@@ -399,6 +468,25 @@ If you need to work with a specific non-public schema, the schema is automatical
 - Verify host and port are correct
 - Check firewall rules if connecting to remote servers
 - Ensure username and password are correct
+
+### MongoDB Specific Issues
+
+**MongoDB Atlas Connection Issues:**
+- Ensure your IP address is whitelisted in the Atlas security settings
+- Use the correct connection string format with `mongodb+srv://` protocol
+- Check that your cluster is running and not paused
+- Verify database credentials are correct
+
+**MongoDB Collection Display Issues:**
+- Collections may take a moment to appear after connection
+- Ensure the database exists and contains collections
+- Check that your user has permission to list collections
+- For MongoDB Atlas, ensure appropriate network access rules are set
+
+**ObjectId Filtering Not Working:**
+- ObjectId must be exactly 24 hexadecimal characters
+- Use format: `_id=507f1f77bcf86cd799439011`
+- For non-24-char IDs, MongoDB will treat them as strings instead
 
 ### Debugging
 
