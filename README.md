@@ -4,7 +4,7 @@ A keyboard-first SQL TUI built for VIM users [Bubble Tea](https://github.com/cha
 It focuses on speed, clarity, and terminal-native workflows—no mouse,
 no clutter, just efficient querying inside terminal but with the beautifull UI
 
-**Status**: Active development - MySQL and PostgreSQL support available with full CRUD operations, foreign key navigation, pagination, and SQL query editor.
+**Status**: Active development - MySQL, PostgreSQL, and SQLite support available with full CRUD operations, foreign key navigation, pagination, and SQL query editor.
 
 ## Demo
 
@@ -47,6 +47,7 @@ sq --create-connection       # Create a new database connection
 **Database Support:**
 - MySQL database connections with full feature support
 - PostgreSQL database connections with full feature support
+- SQLite database file connections with full feature support
 - Multiple simultaneous connections in sidebar
 - Persistent connection storage
 

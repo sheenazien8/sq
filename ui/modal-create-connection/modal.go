@@ -40,13 +40,14 @@ type ConnectionFields struct {
 // Content implements modal.Content for creating a new connection
 type Content struct {
 	drivers        []string
-	driverIndex    int // 0 = MySQL, 1 = PostgreSQL
+	driverIndex    int // 0 = MySQL, 1 = PostgreSQL, 2 = SQLite
 	focusField     FocusField
 	result         modal.Result
 	closed         bool
 	width          int
 	mysqlFields    ConnectionFields
 	postgresFields ConnectionFields
+	sqliteFields   ConnectionFields
 	errorMsg       string
 }
 
@@ -54,15 +55,17 @@ type Content struct {
 func NewContent() *Content {
 	mysql := createConnectionFields()
 	postgres := createConnectionFields()
+	sqlite := createSQLiteConnectionFields()
 
 	return &Content{
-		drivers:        []string{"mysql", "postgresql"},
+		drivers:        []string{"mysql", "postgresql", "sqlite"},
 		driverIndex:    0,
 		focusField:     FocusDriverSelect,
 		result:         modal.ResultNone,
 		closed:         false,
 		mysqlFields:    mysql,
 		postgresFields: postgres,
+		sqliteFields:   sqlite,
 	}
 }
 
@@ -110,21 +113,53 @@ func createConnectionFields() ConnectionFields {
 	}
 }
 
+func createSQLiteConnectionFields() ConnectionFields {
+	nameInput := textinput.New()
+	nameInput.Placeholder = "e.g., My SQLite DB"
+	nameInput.CharLimit = 256
+	nameInput.Width = 40
+
+	// SQLite uses file path as "database input"
+	databaseInput := textinput.New()
+	databaseInput.Placeholder = "/path/to/database.db"
+	databaseInput.CharLimit = 256
+	databaseInput.Width = 40
+
+	// Create dummy inputs for unused fields (host, port, username, password)
+	hostInput := textinput.New()
+	portInput := textinput.New()
+	usernameInput := textinput.New()
+	passwordInput := textinput.New()
+
+	return ConnectionFields{
+		nameInput:     nameInput,
+		hostInput:     hostInput,
+		portInput:     portInput,
+		usernameInput: usernameInput,
+		passwordInput: passwordInput,
+		databaseInput: databaseInput,
+	}
+}
+
 // getCurrentFields returns the current driver's fields
 func (c *Content) getCurrentFields() *ConnectionFields {
 	if c.driverIndex == 0 {
 		return &c.mysqlFields
+	} else if c.driverIndex == 1 {
+		return &c.postgresFields
 	}
-	return &c.postgresFields
+	return &c.sqliteFields
 }
 
 // createDriver creates a driver instance for the current driver
 func (c *Content) createDriver() (drivers.Driver, error) {
 	switch c.GetDriver() {
-	case drivers.DriverMySQL:
+	case drivers.DriverTypeMySQL:
 		return &drivers.MySQL{}, nil
-	case drivers.DriverPostgreSQL:
+	case drivers.DriverTypePostgreSQL:
 		return &drivers.PostgreSQL{}, nil
+	case drivers.DriverTypeSQLite:
+		return &drivers.SQLite{}, nil
 	default:
 		return nil, fmt.Errorf("unsupported driver: %s", c.GetDriver())
 	}
@@ -138,6 +173,15 @@ func (c *Content) validate() string {
 		return "Connection name is required"
 	}
 
+	// SQLite only needs name and file path
+	if c.GetDriver() == drivers.DriverTypeSQLite {
+		if filePath := fields.databaseInput.Value(); filePath == "" {
+			return "File path is required"
+		}
+		return ""
+	}
+
+	// MySQL and PostgreSQL need host, port, username, and database
 	if host := fields.hostInput.Value(); host == "" {
 		return "Host is required"
 	}
@@ -181,8 +225,8 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		// Handle text input fields
-		if c.focusField >= FocusHostInput && c.focusField <= FocusDatabaseInput {
+		// Handle text input fields for MySQL/PostgreSQL
+		if c.focusField >= FocusHostInput && c.focusField <= FocusDatabaseInput && c.GetDriver() != drivers.DriverTypeSQLite {
 			switch msg.String() {
 			case "esc":
 				logger.Debug("Create connection cancelled", nil)
@@ -202,6 +246,29 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 				} else {
 					c.focusField = (c.focusField - 1)
 				}
+				c.updateFocus()
+				return c, nil
+			default:
+				// Pass all other keys to text input
+				fields.handleInputUpdate(msg, c.focusField)
+				return c, nil
+			}
+		}
+
+		// Handle text input field for SQLite (only database input for file path)
+		if c.focusField == FocusDatabaseInput && c.GetDriver() == drivers.DriverTypeSQLite {
+			switch msg.String() {
+			case "esc":
+				logger.Debug("Create connection cancelled", nil)
+				c.result = modal.ResultCancel
+				c.closed = true
+				return c, nil
+			case "tab", "down":
+				c.focusField = FocusSubmitButton
+				c.updateFocus()
+				return c, nil
+			case "shift+tab", "up":
+				c.focusField = FocusNameInput
 				c.updateFocus()
 				return c, nil
 			default:
@@ -245,7 +312,13 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 				c.closed = true
 				return c, nil
 			case "tab", "down":
-				c.focusField = FocusHostInput
+				// For SQLite, skip to database input (file path)
+				// For MySQL/PostgreSQL, go to host input
+				if c.GetDriver() == drivers.DriverTypeSQLite {
+					c.focusField = FocusDatabaseInput
+				} else {
+					c.focusField = FocusHostInput
+				}
 				c.updateFocus()
 				return c, nil
 			case "shift+tab", "up":
@@ -477,11 +550,20 @@ func (c *Content) View() string {
 
 	// Render form fields
 	nameRow := renderField("Name", fields.nameInput, c.focusField == FocusNameInput)
-	hostRow := renderField("Host", fields.hostInput, c.focusField == FocusHostInput)
-	portRow := renderField("Port", fields.portInput, c.focusField == FocusPortInput)
-	usernameRow := renderField("Username", fields.usernameInput, c.focusField == FocusUsernameInput)
-	passwordRow := renderField("Password", fields.passwordInput, c.focusField == FocusPasswordInput)
-	databaseRow := renderField("Database", fields.databaseInput, c.focusField == FocusDatabaseInput)
+
+	var hostRow, portRow, usernameRow, passwordRow, databaseRow string
+
+	if c.GetDriver() == drivers.DriverTypeSQLite {
+		// For SQLite, show the database input as file path
+		databaseRow = renderField("Path", fields.databaseInput, c.focusField == FocusDatabaseInput)
+	} else {
+		// For MySQL and PostgreSQL, show all fields
+		hostRow = renderField("Host", fields.hostInput, c.focusField == FocusHostInput)
+		portRow = renderField("Port", fields.portInput, c.focusField == FocusPortInput)
+		usernameRow = renderField("Username", fields.usernameInput, c.focusField == FocusUsernameInput)
+		passwordRow = renderField("Password", fields.passwordInput, c.focusField == FocusPasswordInput)
+		databaseRow = renderField("Database", fields.databaseInput, c.focusField == FocusDatabaseInput)
+	}
 
 	// Error message
 	var errorRow string
@@ -517,15 +599,15 @@ func (c *Content) View() string {
 	contentStyle := lipgloss.NewStyle().
 		Padding(0, 0)
 
-	content := []string{
-		driverRow,
-		nameRow,
-		hostRow,
-		portRow,
-		usernameRow,
-		passwordRow,
-		databaseRow,
+	var content []string
+	content = append(content, driverRow, nameRow)
+
+	if c.GetDriver() == drivers.DriverTypeSQLite {
+		content = append(content, databaseRow)
+	} else {
+		content = append(content, hostRow, portRow, usernameRow, passwordRow, databaseRow)
 	}
+
 	if errorRow != "" {
 		content = append(content, errorRow)
 	}
@@ -571,6 +653,15 @@ func (c *Content) BuildConnectionString() string {
 	fields := c.getCurrentFields()
 	driver := c.GetDriver()
 
+	if driver == drivers.DriverTypeSQLite {
+		// SQLite URL format: sqlite:///path/to/database.db
+		filePath := fields.databaseInput.Value()
+		if filePath == "" {
+			return ""
+		}
+		return fmt.Sprintf("sqlite://%s", filePath)
+	}
+
 	host := fields.hostInput.Value()
 	if host == "" {
 		host = "localhost"
@@ -585,13 +676,13 @@ func (c *Content) BuildConnectionString() string {
 	password := fields.passwordInput.Value()
 	database := fields.databaseInput.Value()
 
-	if driver == drivers.DriverMySQL {
+	if driver == drivers.DriverTypeMySQL {
 		// MySQL URL format: mysql://user:password@host:port/database
 		if password != "" {
 			return fmt.Sprintf("mysql://%s:%s@%s:%s/%s", username, password, host, port, database)
 		}
 		return fmt.Sprintf("mysql://%s@%s:%s/%s", username, host, port, database)
-	} else if driver == drivers.DriverPostgreSQL {
+	} else if driver == drivers.DriverTypePostgreSQL {
 		// PostgreSQL URL format: postgres://user:password@host:port/database?sslmode=disable
 		if password != "" {
 			return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", username, password, host, port, database)
@@ -615,7 +706,7 @@ func (c *Content) Reset() {
 	c.closed = false
 	c.errorMsg = ""
 
-	// Reset both driver field sets but keep defaults
+	// Reset all driver field sets but keep defaults
 	c.mysqlFields.nameInput.SetValue("")
 	c.mysqlFields.hostInput.SetValue("localhost")
 	c.mysqlFields.portInput.SetValue("3306")
@@ -629,6 +720,9 @@ func (c *Content) Reset() {
 	c.postgresFields.usernameInput.SetValue("postgres")
 	c.postgresFields.passwordInput.SetValue("")
 	c.postgresFields.databaseInput.SetValue("")
+
+	c.sqliteFields.nameInput.SetValue("")
+	c.sqliteFields.databaseInput.SetValue("")
 
 	c.getCurrentFields().nameInput.Focus()
 }
@@ -671,6 +765,8 @@ func (m *Model) SetSize(width, height int) {
 	m.modal.SetSize(width, height)
 	// Set a fixed smaller width for the content
 	m.content.SetWidth(60)
+	// Update SQLite database input width
+	m.content.sqliteFields.databaseInput.Width = 35
 }
 
 // Update handles input

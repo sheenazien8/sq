@@ -736,6 +736,8 @@ func (m *Model) connectToDatabase(name, connType, url string) error {
 		driver = &drivers.MySQL{}
 	case "postgresql":
 		driver = &drivers.PostgreSQL{}
+	case "sqlite":
+		driver = &drivers.SQLite{}
 	default:
 		return fmt.Errorf("unsupported database type: %s", connType)
 	}
@@ -792,6 +794,14 @@ func extractDatabaseName(url, connType string) string {
 			// Remove query parameters if any
 			dbPart := strings.Split(parts[len(parts)-1], "?")[0]
 			return dbPart
+		}
+	case "sqlite":
+		// For SQLite URLs like "sqlite:///path/to/database.db"
+		parts := strings.Split(url, "sqlite://")
+		if len(parts) > 1 {
+			// Remove query parameters if any
+			filePath := strings.Split(parts[1], "?")[0]
+			return filePath
 		}
 	}
 	return ""

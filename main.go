@@ -8,6 +8,7 @@ import (
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/sheenazien8/sq/app"
+	"github.com/sheenazien8/sq/drivers"
 	"github.com/sheenazien8/sq/internal/version"
 	"github.com/sheenazien8/sq/logger"
 	"github.com/sheenazien8/sq/storage"
@@ -20,13 +21,13 @@ func main() {
 
 	// Connection creation flags
 	createConnFlag := flag.Bool("create-connection", false, "Create a new database connection")
-	connDriver := flag.String("driver", "mysql", "Database driver (mysql)")
+	connDriver := flag.String("driver", drivers.DriverTypeMySQL, "Database driver (mysql, postgresql, sqlite)")
 	connName := flag.String("name", "", "Connection name")
 	connHost := flag.String("host", "localhost", "Database host")
 	connPort := flag.String("port", "3306", "Database port")
 	connUser := flag.String("user", "", "Database user")
 	connPass := flag.String("password", "", "Database password")
-	connDB := flag.String("database", "", "Database name")
+	connDB := flag.String("database", "", "Database name or SQLite file path")
 
 	flag.Parse()
 
@@ -81,19 +82,31 @@ func main() {
 // handleCreateConnection creates a new database connection from CLI flags
 func handleCreateConnection(driver, name, host, port, user, password, database string) error {
 	// Validate driver
-	if driver != "mysql" {
-		return fmt.Errorf("unsupported driver: %s (supported: mysql)", driver)
+	supportedDrivers := map[string]bool{
+		drivers.DriverTypeMySQL:      true,
+		drivers.DriverTypePostgreSQL: true,
+		drivers.DriverTypeSQLite:     true,
+	}
+	if !supportedDrivers[driver] {
+		return fmt.Errorf("unsupported driver: %s (supported: mysql, postgresql, sqlite)", driver)
 	}
 
 	// Validate required fields
 	if name == "" {
 		return fmt.Errorf("connection name is required (--name)")
 	}
-	if user == "" {
-		return fmt.Errorf("database user is required (--user)")
-	}
 	if database == "" {
-		return fmt.Errorf("database name is required (--database)")
+		return fmt.Errorf("database name/path is required (--database)")
+	}
+
+	// Validate driver-specific fields
+	if driver == drivers.DriverTypeSQLite {
+		// SQLite only needs name and file path
+	} else if driver == drivers.DriverTypeMySQL || driver == drivers.DriverTypePostgreSQL {
+		// MySQL and PostgreSQL need user and database
+		if user == "" {
+			return fmt.Errorf("database user is required (--user)")
+		}
 	}
 
 	// Initialize storage
@@ -107,12 +120,24 @@ func handleCreateConnection(driver, name, host, port, user, password, database s
 		return fmt.Errorf("failed to setup logger: %w", err)
 	}
 
-	// Build MySQL connection URL
+	// Build connection URL based on driver
 	var url string
-	if password == "" {
-		url = fmt.Sprintf("mysql://%s@%s:%s/%s", user, host, port, database)
-	} else {
-		url = fmt.Sprintf("mysql://%s:%s@%s:%s/%s", user, password, host, port, database)
+	switch driver {
+	case drivers.DriverTypeMySQL:
+		if password == "" {
+			url = fmt.Sprintf("mysql://%s@%s:%s/%s", user, host, port, database)
+		} else {
+			url = fmt.Sprintf("mysql://%s:%s@%s:%s/%s", user, password, host, port, database)
+		}
+	case drivers.DriverTypePostgreSQL:
+		if password == "" {
+			url = fmt.Sprintf("postgres://%s@%s:%s/%s?sslmode=disable", user, host, port, database)
+		} else {
+			url = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", user, password, host, port, database)
+		}
+	case drivers.DriverTypeSQLite:
+		// SQLite URL format: sqlite:///path/to/database.db
+		url = fmt.Sprintf("sqlite://%s", database)
 	}
 
 	// Create connection (this will test the connection before saving)

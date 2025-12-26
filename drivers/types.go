@@ -1,5 +1,12 @@
 package drivers
 
+// Driver type constants for use in switch cases and comparisons
+const (
+	DriverTypeMySQL      = "mysql"
+	DriverTypePostgreSQL = "postgresql"
+	DriverTypeSQLite     = "sqlite"
+)
+
 // ColumnInfo represents detailed column information
 type ColumnInfo struct {
 	Name         string
