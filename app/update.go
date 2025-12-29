@@ -207,11 +207,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Add tab with table data
+		// Add tab with table data (or switch to existing if already open)
 		tabName := msg.ConnectionName + "." + msg.TableName
-		m.Tabs.AddTableTab(tabName, m.columns, m.allRows)
+		newTabCreated := m.Tabs.AddTableTab(tabName, m.columns, m.allRows)
 
-		// Set pagination info on the table
+		// Set pagination info on the table (only if new tab was created or switching to unfiltered tab)
 		if paginatedResult != nil {
 			m.Tabs.SetActiveTabPagination(
 				paginatedResult.Page,
@@ -226,7 +226,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		tableHeight := m.ContentHeight - 3 - 2
 		m.Tabs.SetSize(tableWidth, tableHeight)
 
-		// Update filter UI to show the new tab's filter (which is empty for a new tab)
+		// Log whether tab was created or switched
+		if newTabCreated {
+			logger.Debug("New table tab created", map[string]any{
+				"table": tabName,
+			})
+		} else {
+			logger.Debug("Switched to existing table tab", map[string]any{
+				"table": tabName,
+			})
+		}
 
 		// Switch focus to main area
 		m.Focus = FocusMain
@@ -674,7 +683,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				if dbName != "" {
-					// Add query tab
+					// Add new query tab (always creates a fresh query editor)
 					tabName := "Query"
 					m.Tabs.AddQueryTab(tabName, activeDB.Name, dbName)
 
@@ -683,15 +692,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					tableHeight := m.ContentHeight - 3 - 2
 					m.Tabs.SetSize(tableWidth, tableHeight)
 
-					// Update filter UI for the new tab (query tabs have no filter)
-
 					// Switch focus to main area
 					m.Focus = FocusMain
 					m.Sidebar.SetFocused(false)
 					m.Tabs.SetFocused(true)
 					m = m.updateFooter()
 
-					logger.Info("Query editor opened", map[string]any{
+					logger.Info("New query editor opened", map[string]any{
 						"connection": activeDB.Name,
 						"database":   dbName,
 					})
@@ -1099,14 +1106,25 @@ func (m *Model) loadTableStructure() error {
 		return err
 	}
 
-	// Add structure tab
+	// Add structure tab (or switch to existing if already open)
 	tabName := connectionName + "." + tableName
-	m.Tabs.AddStructureTab(tabName, structure)
+	newTabCreated := m.Tabs.AddStructureTab(tabName, structure)
 
 	// Set tab dimensions
 	tableWidth := m.ContentWidth - 4
 	tableHeight := m.ContentHeight - 3 - 2
 	m.Tabs.SetSize(tableWidth, tableHeight)
+
+	// Log whether tab was created or switched
+	if newTabCreated {
+		logger.Debug("New structure tab created", map[string]any{
+			"table": tabName,
+		})
+	} else {
+		logger.Debug("Switched to existing structure tab", map[string]any{
+			"table": tabName,
+		})
+	}
 
 	return nil
 }
@@ -1235,11 +1253,30 @@ func (m *Model) goToForeignKeyDefinition() error {
 
 	// Create new tab for referenced table
 	targetTabName := connectionName + "." + referencedTable
-	m.Tabs.AddTableTab(targetTabName, targetColumns, rows)
-	m.Tabs.AddActiveTabFilter(filter.Filter{
+	newTabCreated := m.Tabs.AddTableTab(targetTabName, targetColumns, rows)
+
+	// Create filter object
+	newFilter := filter.Filter{
 		WhereClause: whereClause,
-	})
-	m.Tabs.FocusFilter()
+	}
+
+	// If we switched to an existing tab, we need to apply the filter to it
+	if !newTabCreated {
+		// Check if this is a different filter from what's currently applied
+		activeTab := m.Tabs.ActiveTab()
+		if activeTab != nil {
+			currentFilter := m.Tabs.GetActiveTabFilter()
+			// Only apply filter if it's different from current one
+			if currentFilter == nil || currentFilter.WhereClause != whereClause {
+				m.Tabs.AddActiveTabFilter(newFilter)
+				m.Tabs.FocusFilter()
+			}
+		}
+	} else {
+		// New tab was created, apply the filter
+		m.Tabs.AddActiveTabFilter(newFilter)
+		m.Tabs.FocusFilter()
+	}
 
 	tableWidth := m.ContentWidth - 4
 	tableHeight := m.ContentHeight - 3 - 2
