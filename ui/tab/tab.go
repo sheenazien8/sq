@@ -1,6 +1,8 @@
 package tab
 
 import (
+	"crypto/md5"
+	"fmt"
 	"slices"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -15,6 +17,7 @@ import (
 
 // Tab represents a single tab containing content
 type Tab struct {
+	ID           string // Unique identifier for the tab (connection.table[.filter_hash])
 	Name         string
 	Content      interface{} // Can be table.Model or query_editor.Model
 	Type         TabType
@@ -34,6 +37,31 @@ const (
 	TabTypeStructure
 	TabTypeQuery
 )
+
+// GenerateTableTabID creates a unique ID for a table tab
+// Format: connection.table or connection.table.filter_hash if filter is present
+func GenerateTableTabID(connectionName, tableName string, filter *filter.Filter) string {
+	id := connectionName + "." + tableName
+	if filter != nil && filter.WhereClause != "" {
+		// Create hash of filter for uniqueness
+		hash := md5.Sum([]byte(filter.WhereClause))
+		id = fmt.Sprintf("%s.%x", id, hash[:4])
+	}
+	return id
+}
+
+// GenerateStructureTabID creates a unique ID for a structure tab
+func GenerateStructureTabID(connectionName, tableName string) string {
+	return fmt.Sprintf("%s.%s[S]", connectionName, tableName)
+}
+
+// GenerateQueryTabID creates a unique ID for a query tab
+func GenerateQueryTabID(connectionName, databaseName, queryHash string) string {
+	if queryHash == "" {
+		return fmt.Sprintf("%s.%s[Q]", connectionName, databaseName)
+	}
+	return fmt.Sprintf("%s.%s[Q]", connectionName, databaseName)
+}
 
 // TabSwitchedMsg is sent when the active tab changes
 type TabSwitchedMsg struct {
@@ -530,6 +558,17 @@ func (m Model) HasTabs() bool {
 	return len(m.tabs) > 0
 }
 
+// FindTabByID searches for a tab with the given ID and returns its index
+// Returns -1 if not found
+func (m Model) FindTabByID(id string) int {
+	for i, tab := range m.tabs {
+		if tab.ID == id {
+			return i
+		}
+	}
+	return -1
+}
+
 // ActiveTab returns the currently active tab
 func (m Model) ActiveTab() *Tab {
 	if m.activeTab >= 0 && m.activeTab < len(m.tabs) {
@@ -618,8 +657,9 @@ func (m *Model) ClearActiveTabFilters() {
 	}
 }
 
-// AddTableTab adds a new tab with table data
-func (m *Model) AddTableTab(name string, columns []table.Column, rows []table.Row) {
+// AddTableTab adds a new tab with table data, or switches to existing tab if already open
+// Returns true if a new tab was created, false if switched to existing tab
+func (m *Model) AddTableTab(name string, columns []table.Column, rows []table.Row) bool {
 	logger.Debug("AddTableTab called", map[string]any{
 		"name":    name,
 		"columns": len(columns),
@@ -628,11 +668,25 @@ func (m *Model) AddTableTab(name string, columns []table.Column, rows []table.Ro
 		"height":  m.height,
 	})
 
+	// Generate tab ID without filter (base ID)
+	tabID := name // For now using name as ID since connection.table format is already in the name
+
+	// Check if tab already exists
+	existingTabIdx := m.FindTabByID(tabID)
+	if existingTabIdx != -1 {
+		logger.Debug("Tab already exists, switching to it", map[string]any{
+			"tabID": tabID,
+			"index": existingTabIdx,
+		})
+		m.SwitchTab(existingTabIdx)
+		return false
+	}
+
 	newTable := table.New(columns, rows)
 	newTable.SetSize(m.width, m.height-3)
 	newTable.SetFocused(m.focused)
 	newTable.SetAutoFit(m.autoFitColumns) // Apply auto-fit setting from config
-	logger.Info("Adding table to tab", map[string]any{
+	logger.Info("Creating new table tab", map[string]any{
 		"name": name,
 		"type": TabTypeTable,
 	})
@@ -647,6 +701,7 @@ func (m *Model) AddTableTab(name string, columns []table.Column, rows []table.Ro
 	filterUI := filter.New(columnNames)
 
 	newTab := Tab{
+		ID:          tabID,
 		Name:        name,
 		Content:     newTable,
 		Type:        TabTypeTable,
@@ -658,6 +713,7 @@ func (m *Model) AddTableTab(name string, columns []table.Column, rows []table.Ro
 	}
 
 	m.addTab(newTab)
+	return true
 }
 
 // addTab is a helper to add a tab and manage active state
@@ -687,8 +743,9 @@ func (m *Model) addTab(newTab Tab) {
 	m.activeTab = len(m.tabs) - 1
 }
 
-// AddStructureTab adds a new tab with table structure data
-func (m *Model) AddStructureTab(name string, structure *drivers.TableStructure) {
+// AddStructureTab adds a new tab with table structure data, or switches to existing tab if already open
+// Returns true if a new tab was created, false if switched to existing tab
+func (m *Model) AddStructureTab(name string, structure *drivers.TableStructure) bool {
 	logger.Debug("AddStructureTab called", map[string]any{
 		"name":      name,
 		"columns":   len(structure.Columns),
@@ -697,10 +754,25 @@ func (m *Model) AddStructureTab(name string, structure *drivers.TableStructure) 
 		"triggers":  len(structure.Triggers),
 	})
 
+	// Generate structure tab ID
+	tabID := name + "[S]"
+
+	// Check if tab already exists
+	existingTabIdx := m.FindTabByID(tabID)
+	if existingTabIdx != -1 {
+		logger.Debug("Structure tab already exists, switching to it", map[string]any{
+			"tabID": tabID,
+			"index": existingTabIdx,
+		})
+		m.SwitchTab(existingTabIdx)
+		return false
+	}
+
 	sv := NewStructureView(structure, m.width, m.height-3)
 	sv.SetFocused(m.focused)
 
 	newTab := Tab{
+		ID:      tabID,
 		Name:    name,
 		Content: sv,
 		Type:    TabTypeStructure,
@@ -708,21 +780,28 @@ func (m *Model) AddStructureTab(name string, structure *drivers.TableStructure) 
 	}
 
 	m.addTab(newTab)
+	return true
 }
 
-// AddQueryTab adds a new tab with a query editor
-func (m *Model) AddQueryTab(name, connectionName, databaseName string) {
+// AddQueryTab always creates a new tab with a fresh query editor
+// Each query session is independent, so we always create a new tab
+func (m *Model) AddQueryTab(name, connectionName, databaseName string) bool {
 	logger.Debug("AddQueryTab called", map[string]any{
 		"name":       name,
 		"connection": connectionName,
 		"database":   databaseName,
 	})
 
+	// Generate unique query tab ID with timestamp/counter to ensure uniqueness
+	// Each query tab should be independent, so we don't reuse tabs
+	tabID := fmt.Sprintf("%s.%s[Q]-%d", connectionName, databaseName, len(m.tabs))
+
 	qe := queryeditor.New(connectionName, databaseName)
 	qe.SetSize(m.width, m.height-3)
 	qe.SetFocused(m.focused)
 
 	newTab := Tab{
+		ID:      tabID,
 		Name:    name,
 		Content: qe,
 		Type:    TabTypeQuery,
@@ -730,6 +809,11 @@ func (m *Model) AddQueryTab(name, connectionName, databaseName string) {
 	}
 
 	m.addTab(newTab)
+	logger.Debug("New query tab created", map[string]any{
+		"tabID": tabID,
+		"index": m.activeTab,
+	})
+	return true
 }
 
 // GetActiveQueryEditor returns the query editor from the active tab if it's a query tab
