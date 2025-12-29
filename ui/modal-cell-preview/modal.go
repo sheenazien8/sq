@@ -5,6 +5,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/sheenazien8/sq/ui/modal"
 	"github.com/sheenazien8/sq/ui/theme"
 )
@@ -65,11 +66,11 @@ func (m Model) Result() modal.Result {
 
 // PreviewContent implements Content for cell preview
 type PreviewContent struct {
-	viewport viewport.Model
-	content  string
-	width    int
-	height   int
-	closed   bool
+	viewport   viewport.Model
+	rawContent string
+	width      int
+	height     int
+	closed     bool
 }
 
 // NewPreviewContent creates a new preview content
@@ -84,9 +85,21 @@ func NewPreviewContent() *PreviewContent {
 
 // SetContent sets the content to preview
 func (p *PreviewContent) SetContent(content string) {
-	p.content = content
+	p.rawContent = content
 	p.closed = false
-	p.viewport.SetContent(content)
+	p.updateViewportContent()
+}
+
+// updateViewportContent wraps content and sets it on the viewport
+func (p *PreviewContent) updateViewportContent() {
+	if p.width == 0 {
+		// Width not set yet, use raw content
+		p.viewport.SetContent(p.rawContent)
+		return
+	}
+	// Wrap the content to fit the width
+	wrapped := lipgloss.NewStyle().Width(p.width).Render(p.rawContent)
+	p.viewport.SetContent(wrapped)
 }
 
 // Update handles input
@@ -112,7 +125,7 @@ func (p *PreviewContent) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 
 // View renders the content
 func (p *PreviewContent) View() string {
-	if p.content == "" {
+	if p.rawContent == "" {
 		return "No content to preview"
 	}
 
@@ -140,7 +153,8 @@ func (p *PreviewContent) ShouldClose() bool {
 // SetWidth sets the content width
 func (p *PreviewContent) SetWidth(width int) {
 	p.width = width
-	p.height = 20 // Fixed height for preview
+	p.height = 20 // Compact height with scrolling
 	p.viewport.Width = width
 	p.viewport.Height = p.height - 2 // Account for info line
+	p.updateViewportContent()        // Re-wrap content with new width
 }
