@@ -139,15 +139,7 @@ func (c *Content) validate() string {
 		return ""
 	}
 
-	// MongoDB Atlas only needs the connection URI
-	if c.driverType == drivers.DriverTypeMongoDBAtlas {
-		if uri := c.fields.uriInput.Value(); uri == "" {
-			return "MongoDB Atlas connection URI is required"
-		}
-		return ""
-	}
-
-	// MySQL, PostgreSQL, and MongoDB need host, port, username, and database
+	// MySQL, PostgreSQL need host, port, username, and database
 	if host := c.fields.hostInput.Value(); host == "" {
 		return "Host is required"
 	}
@@ -178,16 +170,12 @@ func (c *Content) getDefaultPort() string {
 		return "3306"
 	case drivers.DriverTypePostgreSQL:
 		return "5432"
-	case drivers.DriverTypeMongoDB:
-		return "27017"
 	default:
 		return "5432"
 	}
 }
 
 func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
-	var cmd tea.Cmd
-
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		// Handle text input fields
@@ -201,11 +189,7 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 			case "tab", "down":
 				c.focusField = (c.focusField + 1)
 				if c.focusField > FocusDatabaseInput {
-					if c.driverType == drivers.DriverTypeMongoDBAtlas {
-						c.focusField = FocusUriInput
-					} else {
-						c.focusField = FocusSubmitButton
-					}
+					c.focusField = FocusSubmitButton
 				}
 				c.updateFocus()
 				return c, nil
@@ -220,28 +204,6 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 			default:
 				c.handleInputUpdate(msg, c.focusField)
 				return c, nil
-			}
-		}
-
-		// Handle MongoDB Atlas URI input
-		if c.focusField == FocusUriInput && c.driverType == drivers.DriverTypeMongoDBAtlas {
-			switch msg.String() {
-			case "esc":
-				logger.Debug("Edit connection cancelled", nil)
-				c.result = modal.ResultCancel
-				c.closed = true
-				return c, nil
-			case "tab", "down":
-				c.focusField = FocusSubmitButton
-				c.updateFocus()
-				return c, nil
-			case "shift+tab", "up":
-				c.focusField = FocusDatabaseInput
-				c.updateFocus()
-				return c, nil
-			default:
-				c.fields.uriInput, cmd = c.fields.uriInput.Update(msg)
-				return c, cmd
 			}
 		}
 
@@ -435,12 +397,10 @@ func (c *Content) View() string {
 	// Render form fields
 	nameRow := renderField("Name", c.fields.nameInput, c.focusField == FocusNameInput)
 
-	var hostRow, portRow, usernameRow, passwordRow, databaseRow, uriRow string
+	var hostRow, portRow, usernameRow, passwordRow, databaseRow string
 
 	if c.driverType == drivers.DriverTypeSQLite {
 		databaseRow = renderField("Path", c.fields.databaseInput, c.focusField == FocusDatabaseInput)
-	} else if c.driverType == drivers.DriverTypeMongoDBAtlas {
-		uriRow = renderField("URI", c.fields.uriInput, c.focusField == FocusUriInput)
 	} else {
 		hostRow = renderField("Host", c.fields.hostInput, c.focusField == FocusHostInput)
 		portRow = renderField("Port", c.fields.portInput, c.focusField == FocusPortInput)
@@ -487,8 +447,6 @@ func (c *Content) View() string {
 
 	if c.driverType == drivers.DriverTypeSQLite {
 		content = append(content, databaseRow)
-	} else if c.driverType == drivers.DriverTypeMongoDBAtlas {
-		content = append(content, uriRow)
 	} else {
 		content = append(content, hostRow, portRow, usernameRow, passwordRow, databaseRow)
 	}
