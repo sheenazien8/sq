@@ -75,8 +75,8 @@ func (db *PostgreSQL) detectSchema() error {
 	}
 
 	// If public doesn't exist, try to find user-created schemas (exclude system schemas)
-	query = `SELECT schema_name FROM information_schema.schemata 
-		WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast') 
+	query = `SELECT schema_name FROM information_schema.schemata
+		WHERE schema_name NOT IN ('pg_catalog', 'information_schema', 'pg_toast')
 		ORDER BY schema_name LIMIT 1`
 	err = db.Connection.QueryRow(query).Scan(&schemaName)
 	if err == nil {
@@ -100,6 +100,11 @@ func (db *PostgreSQL) TestConnection(urlstr string) error {
 	return conn.Ping()
 }
 
+// QuoteIdentifier quotes an identifier for PostgreSQL (uses double quotes)
+func (db *PostgreSQL) QuoteIdentifier(identifier string) string {
+	return `"` + strings.ReplaceAll(identifier, `"`, `""`) + `"`
+}
+
 // GetTables returns all tables for a given database, organized by schema
 func (db *PostgreSQL) GetTables(database string) (map[string][]string, error) {
 	if database == "" {
@@ -111,7 +116,7 @@ func (db *PostgreSQL) GetTables(database string) (map[string][]string, error) {
 	db.CurrentDatabase = database
 
 	// Query all tables from all schemas in the current database, excluding system schemas
-	query := `SELECT table_name, table_schema FROM information_schema.tables 
+	query := `SELECT table_name, table_schema FROM information_schema.tables
 		WHERE table_catalog = $1 AND table_type = 'BASE TABLE'
 		AND table_schema NOT IN ('pg_catalog', 'information_schema', 'pg_toast', 'pg_temp_1')
 		ORDER BY table_schema, table_name`
@@ -152,9 +157,9 @@ func (db *PostgreSQL) GetTables(database string) (map[string][]string, error) {
 // GetTableColumns returns basic column information for a table
 func (db *PostgreSQL) GetTableColumns(database, table string) ([][]string, error) {
 	query := `
-		SELECT 
-			column_name, 
-			data_type, 
+		SELECT
+			column_name,
+			data_type,
 			is_nullable,
 			column_default,
 			''::text as key_type
@@ -499,6 +504,37 @@ func (db *PostgreSQL) GetTableStructure(database, table string) (*TableStructure
 	indexes, err := db.GetIndexInfo(database, table)
 	if err != nil {
 		return nil, err
+	}
+
+	primaryKeyColumns := make(map[string]bool)
+
+	// Also check for primary key constraints directly
+	query := `
+		SELECT kcu.column_name
+		FROM information_schema.table_constraints tc
+		JOIN information_schema.key_column_usage kcu ON tc.constraint_name = kcu.constraint_name
+		WHERE tc.constraint_type = 'PRIMARY KEY'
+		AND tc.table_schema = $1
+		AND tc.table_name = $2
+		ORDER BY kcu.ordinal_position
+	`
+
+	rows, err := db.Connection.Query(query, db.Schema, table)
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var colName string
+			if err := rows.Scan(&colName); err == nil {
+				primaryKeyColumns[colName] = true
+			}
+		}
+	}
+
+	// Set IsPrimaryKey flag on columns
+	for i := range columns {
+		if primaryKeyColumns[columns[i].Name] {
+			columns[i].IsPrimaryKey = true
+		}
 	}
 
 	relations, err := db.GetRelationInfo(database, table)

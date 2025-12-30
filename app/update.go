@@ -13,6 +13,7 @@ import (
 
 	"github.com/sheenazien8/sq/ui/filter"
 	"github.com/sheenazien8/sq/ui/modal"
+	"github.com/sheenazien8/sq/ui/modal-action"
 	queryeditor "github.com/sheenazien8/sq/ui/query-editor"
 	"github.com/sheenazien8/sq/ui/sidebar"
 	"github.com/sheenazien8/sq/ui/tab"
@@ -298,6 +299,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ExitModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 		m.CreateConnectionModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 		m.CellPreviewModal.SetSize(m.TerminalWidth, m.TerminalHeight)
+		m.ActionModal.SetSize(m.TerminalWidth, m.TerminalHeight)
+		m.EditCellModal.SetSize(m.TerminalWidth, m.TerminalHeight)
+		m.ConfirmModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 		m.HelpModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 
 	case tea.KeyMsg:
@@ -383,6 +387,107 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Check if modal was closed
 			if !m.CellPreviewModal.Visible() {
+				m.Focus = FocusMain
+				m.Sidebar.SetFocused(false)
+				m.Tabs.SetFocused(true)
+				m = m.updateFooter()
+			}
+			return m, tea.Batch(cmds...)
+		}
+
+		if m.ActionModal.Visible() {
+			m.ActionModal, cmd = m.ActionModal.Update(msg)
+			cmds = append(cmds, cmd)
+
+			// Check if modal was closed
+			if !m.ActionModal.Visible() {
+				action := m.ActionModal.SelectedAction()
+				if action != modalaction.ActionNone {
+					if action == modalaction.ActionEditCell {
+						// Special case: Edit cell shows input modal instead of confirmation
+						tableName := m.ActionModal.GetTableName()
+						columnNames := m.ActionModal.GetColumnNames()
+						selectedCol := m.ActionModal.GetSelectedColumn()
+						currentValue := m.ActionModal.GetCellValue()
+
+						if selectedCol >= 0 && selectedCol < len(columnNames) {
+							columnName := columnNames[selectedCol]
+							m.EditCellModal.Show(currentValue, columnName, tableName)
+							m.confirmAction = action
+							m.confirmActionModal = &m.ActionModal
+							m.Focus = FocusEditCellModal
+							m = m.updateFooter()
+						} else {
+							// Invalid column, return to main
+							m.Focus = FocusMain
+							m.Sidebar.SetFocused(false)
+							m.Tabs.SetFocused(true)
+							m = m.updateFooter()
+						}
+					} else if m.actionNeedsConfirmation(action) {
+						// Show confirmation modal for destructive actions
+						confirmMessage := m.getActionConfirmationMessage(action, &m.ActionModal)
+						m.confirmAction = action
+						m.confirmActionModal = &m.ActionModal
+						confirmContent := modal.NewConfirmContent(confirmMessage)
+						m.ConfirmModal.SetContent(confirmContent)
+						m.ConfirmModal.Show()
+						m.Focus = FocusConfirmModal
+						m = m.updateFooter()
+					} else {
+						// Execute safe actions immediately (no confirmation needed)
+						m = m.handleAction(action, &m.ActionModal)
+						m.Focus = FocusMain
+						m.Sidebar.SetFocused(false)
+						m.Tabs.SetFocused(true)
+						m = m.updateFooter()
+					}
+				} else {
+					// Action was cancelled
+					m.Focus = FocusMain
+					m.Sidebar.SetFocused(false)
+					m.Tabs.SetFocused(true)
+					m = m.updateFooter()
+				}
+			}
+			return m, tea.Batch(cmds...)
+		}
+
+		if m.EditCellModal.Visible() {
+			m.EditCellModal, cmd = m.EditCellModal.Update(msg)
+			cmds = append(cmds, cmd)
+
+			// Check if modal was closed
+			if !m.EditCellModal.Visible() {
+				if m.EditCellModal.Confirmed() && m.confirmAction == modalaction.ActionEditCell && m.confirmActionModal != nil {
+					// Execute the edit with the new value
+					newValue := m.EditCellModal.GetNewValue()
+					m = m.handleCellUpdate(m.confirmActionModal, "'"+newValue+"'")
+				}
+				// Reset confirmation state
+				m.confirmAction = modalaction.ActionNone
+				m.confirmActionModal = nil
+				m.Focus = FocusMain
+				m.Sidebar.SetFocused(false)
+				m.Tabs.SetFocused(true)
+				m = m.updateFooter()
+			}
+			return m, tea.Batch(cmds...)
+		}
+
+		if m.ConfirmModal.Visible() {
+			m.ConfirmModal, cmd = m.ConfirmModal.Update(msg)
+			cmds = append(cmds, cmd)
+
+			// Check if modal was closed
+			if !m.ConfirmModal.Visible() {
+				if m.ConfirmModal.Result() == modal.ResultYes && m.confirmAction != modalaction.ActionNone && m.confirmActionModal != nil {
+					// Execute the confirmed action
+					m = m.handleAction(m.confirmAction, m.confirmActionModal)
+				}
+				// Reset confirmation state
+				m.confirmAction = modalaction.ActionNone
+				m.confirmActionModal = nil
 				m.Focus = FocusMain
 				m.Sidebar.SetFocused(false)
 				m.Tabs.SetFocused(true)
@@ -577,6 +682,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					if cellContent != "" {
 						m.CellPreviewModal.Show(cellContent)
 						m.Focus = FocusCellPreviewModal
+						m = m.updateFooter()
+					}
+				}
+			}
+
+		case "a":
+			if m.Focus == FocusMain && m.Tabs.HasTabs() && m.Tabs.GetActiveTabType() == tab.TabTypeTable {
+				// Show action modal for the selected cell
+				activeTab := m.Tabs.ActiveTab()
+				if tableModel, ok := activeTab.Content.(table.Model); ok {
+					cellValue := tableModel.SelectedCell()
+					rowData := tableModel.SelectedRow()
+					selectedCol := tableModel.CursorCol()
+
+					// Get table info from tab name
+					tabName := m.Tabs.GetActiveTabName()
+					// Parse table name - find the last dot to handle connection names with dots
+					lastDotIndex := strings.LastIndex(tabName, ".")
+					if lastDotIndex > 0 && lastDotIndex < len(tabName)-1 {
+						tableName := tabName[lastDotIndex+1:]
+						// Get column names from the model
+						columnNames := make([]string, len(m.columns))
+						for i, col := range m.columns {
+							columnNames[i] = col.Title
+						}
+
+						m.ActionModal.Show(cellValue, rowData, columnNames, selectedCol, tableName)
+						m.Focus = FocusActionModal
 						m = m.updateFooter()
 					}
 				}
@@ -1038,7 +1171,7 @@ func (m Model) getFooterHelp() string {
 			if tabType == tab.TabTypeQuery {
 				return "?: Help | F5: Execute | Ctrl+R: Results | []: Tabs | Ctrl+W: Close | q: Quit"
 			}
-			return "?: Help | j/k/h/l: Navigate | Space: Sort | </>: Page | /: Filter | []: Tabs | q: Quit"
+			return "?: Help | j/k/h/l: Navigate | Space: Sort | </>: Page | /: Filter | a: Actions | []: Tabs | q: Quit"
 		}
 		return "?: Help | s: Toggle Sidebar | Tab: Switch | q: Quit"
 
@@ -1048,8 +1181,12 @@ func (m Model) getFooterHelp() string {
 		return "y: Yes | n/Esc: No | h/l: Switch"
 	case FocusCreateConnectionModal:
 		return "Tab: Next Field | Enter: Submit | Esc: Cancel"
+	case FocusEditCellModal:
+		return "Enter: Confirm | Esc: Cancel"
+	case FocusConfirmModal:
+		return "y: Yes | n/Esc: No | h/l: Switch"
 	case FocusHelpModal:
-		return "←→/Tab: Sections | j/k: Scroll | Esc/q: Close"
+		return "?: Help | ←→/Tab: Sections | j/k: Scroll | Esc/q: Close"
 	default:
 		return "?: Help | q: Quit"
 	}
@@ -1503,5 +1640,285 @@ func (m Model) reloadTableDataWithSort() Model {
 	tableModel.SetPagination(result.Page, result.TotalPages, result.TotalRows, result.PageSize)
 	m.Tabs.UpdateActiveTabContent(tableModel)
 
+	return m
+}
+
+// actionNeedsConfirmation returns true if the action requires user confirmation
+func (m Model) actionNeedsConfirmation(action modalaction.Action) bool {
+	switch action {
+	case modalaction.ActionCopyCell, modalaction.ActionCopyJSON, modalaction.ActionCopySQL:
+		return false // Safe actions that just copy to clipboard
+	default:
+		return true // Destructive actions need confirmation
+	}
+}
+
+// getActionConfirmationMessage returns the confirmation message for an action
+func (m Model) getActionConfirmationMessage(action modalaction.Action, modal *modalaction.Model) string {
+	tableName := modal.GetTableName()
+	switch action {
+	case modalaction.ActionDeleteRow:
+		return fmt.Sprintf("Are you sure you want to delete this row from table '%s'? This action cannot be undone.", tableName)
+	case modalaction.ActionSetNull:
+		return fmt.Sprintf("Are you sure you want to set this cell to NULL in table '%s'?", tableName)
+	case modalaction.ActionSetEmpty:
+		return fmt.Sprintf("Are you sure you want to set this cell to empty string in table '%s'?", tableName)
+	case modalaction.ActionEditCell:
+		return fmt.Sprintf("Are you sure you want to edit this cell in table '%s'?", tableName)
+	default:
+		return "Are you sure you want to perform this action?"
+	}
+}
+
+// handleAction processes the selected action from the action modal
+func (m Model) handleAction(action modalaction.Action, modal *modalaction.Model) Model {
+	switch action {
+	case modalaction.ActionCopyCell, modalaction.ActionCopyJSON, modalaction.ActionCopySQL:
+		// Copy to clipboard
+		content := modal.GetActionData(action)
+		if content != "" {
+			err := clipboard.WriteAll(content)
+			if err != nil {
+				logger.Error("Failed to copy to clipboard", map[string]any{"error": err.Error()})
+			} else {
+				logger.Info("Content copied to clipboard", map[string]any{"action": action, "length": len(content)})
+			}
+		}
+	case modalaction.ActionDeleteRow:
+		m = m.handleDeleteRow(modal)
+	case modalaction.ActionSetNull:
+		m = m.handleSetNull(modal)
+	case modalaction.ActionSetEmpty:
+		m = m.handleSetEmpty(modal)
+	case modalaction.ActionEditCell:
+		// TODO: Implement edit cell with input modal - for now just set to a test value
+		m = m.handleCellUpdate(modal, "'EDITED_VALUE'")
+		logger.Info("Edit cell action executed with test value", map[string]any{"action": action})
+	default:
+		logger.Info("Unknown action selected", map[string]any{"action": action})
+	}
+	return m
+}
+
+// handleDeleteRow deletes the selected row from the database
+func (m Model) handleDeleteRow(modal *modalaction.Model) Model {
+	tableName := modal.GetTableName()
+	rowData := modal.GetRowData()
+	columnNames := modal.GetColumnNames()
+
+	// Get table structure to find primary keys
+	connectionName := m.currentConnection
+	dbName := m.currentDatabase
+
+	if connectionName == "" || dbName == "" {
+		logger.Error("No active connection or database", nil)
+		return m
+	}
+
+	driver, exists := m.dbConnections[connectionName]
+	if !exists {
+		logger.Error("No active connection", map[string]any{"connection": connectionName})
+		return m
+	}
+
+	structure, err := driver.GetTableStructure(dbName, tableName)
+	if err != nil {
+		logger.Error("Failed to get table structure", map[string]any{"error": err.Error()})
+		return m
+	}
+
+	// Build WHERE clause using primary keys
+	whereClause, err := m.buildPrimaryKeyWhereClause(driver, structure, columnNames, rowData)
+	if err != nil {
+		logger.Error("Failed to build WHERE clause", map[string]any{"error": err.Error()})
+		return m
+	}
+
+	// Execute DELETE query
+	quotedTable := driver.QuoteIdentifier(tableName)
+	query := fmt.Sprintf("DELETE FROM %s WHERE %s", quotedTable, whereClause)
+	logger.Info("Executing DELETE query", map[string]any{"query": query})
+
+	_, err = driver.ExecuteQuery(query)
+	if err != nil {
+		logger.Error("Failed to delete row", map[string]any{"error": err.Error()})
+		return m
+	}
+
+	logger.Info("Row deleted successfully", nil)
+
+	// Refresh the table data
+	return m.reloadTableData()
+}
+
+// handleSetNull sets the selected cell to NULL
+func (m Model) handleSetNull(modal *modalaction.Model) Model {
+	return m.handleCellUpdate(modal, "NULL")
+}
+
+// handleSetEmpty sets the selected cell to empty string
+func (m Model) handleSetEmpty(modal *modalaction.Model) Model {
+	return m.handleCellUpdate(modal, "''")
+}
+
+// handleCellUpdate updates a single cell value
+func (m Model) handleCellUpdate(modal *modalaction.Model, newValue string) Model {
+	tableName := modal.GetTableName()
+	rowData := modal.GetRowData()
+	columnNames := modal.GetColumnNames()
+	selectedCol := modal.GetSelectedColumn()
+
+	// Get table structure to find primary keys
+	connectionName := m.currentConnection
+	dbName := m.currentDatabase
+
+	if connectionName == "" || dbName == "" {
+		logger.Error("No active connection or database", nil)
+		return m
+	}
+
+	driver, exists := m.dbConnections[connectionName]
+	if !exists {
+		logger.Error("No active connection", map[string]any{"connection": connectionName})
+		return m
+	}
+
+	structure, err := driver.GetTableStructure(dbName, tableName)
+	if err != nil {
+		logger.Error("Failed to get table structure", map[string]any{"error": err.Error()})
+		return m
+	}
+
+	// Build WHERE clause using primary keys
+	whereClause, err := m.buildPrimaryKeyWhereClause(driver, structure, columnNames, rowData)
+	if err != nil {
+		logger.Error("Failed to build WHERE clause", map[string]any{"error": err.Error()})
+		return m
+	}
+
+	// Get column name
+	if selectedCol < 0 || selectedCol >= len(columnNames) {
+		logger.Error("Invalid column index", map[string]any{"selectedCol": selectedCol})
+		return m
+	}
+	columnName := columnNames[selectedCol]
+
+	// Execute UPDATE query
+	quotedTable := driver.QuoteIdentifier(tableName)
+	quotedColumn := driver.QuoteIdentifier(columnName)
+	query := fmt.Sprintf("UPDATE %s SET %s = %s WHERE %s", quotedTable, quotedColumn, newValue, whereClause)
+	logger.Info("Executing UPDATE query", map[string]any{"query": query})
+
+	_, err = driver.ExecuteQuery(query)
+	if err != nil {
+		logger.Error("Failed to update cell", map[string]any{"error": err.Error()})
+		return m
+	}
+
+	logger.Info("Cell updated successfully", nil)
+
+	// Refresh the table data
+	return m.reloadTableData()
+}
+
+// buildPrimaryKeyWhereClause builds a WHERE clause using primary key columns
+func (m Model) buildPrimaryKeyWhereClause(driver drivers.Driver, structure *drivers.TableStructure, columnNames []string, rowData []string) (string, error) {
+	var conditions []string
+
+	for _, colInfo := range structure.Columns {
+		if colInfo.IsPrimaryKey {
+			// Find the column name in our columnNames array
+			colIndex := -1
+			for j, name := range columnNames {
+				if name == colInfo.Name {
+					colIndex = j
+					break
+				}
+			}
+
+			if colIndex == -1 || colIndex >= len(rowData) {
+				return "", fmt.Errorf("primary key column %s not found in data", colInfo.Name)
+			}
+
+			value := rowData[colIndex]
+			// Escape single quotes in the value
+			escapedValue := strings.ReplaceAll(value, "'", "''")
+			quotedColumn := driver.QuoteIdentifier(colInfo.Name)
+			conditions = append(conditions, fmt.Sprintf("%s = '%s'", quotedColumn, escapedValue))
+		}
+	}
+
+	if len(conditions) == 0 {
+		return "", fmt.Errorf("no primary key or unique constraint found in table - cannot perform safe row operations")
+	}
+
+	return strings.Join(conditions, " AND "), nil
+}
+
+// reloadTableData refreshes the current table data after modifications
+func (m Model) reloadTableData() Model {
+	activeTab := m.Tabs.ActiveTab()
+	if activeTab == nil || activeTab.Type != tab.TabTypeTable {
+		return m
+	}
+
+	// Get connection and table info from tab name (format: "connection.table")
+	tabName := m.Tabs.GetActiveTabName()
+	parts := strings.Split(tabName, ".")
+	if len(parts) < 2 {
+		logger.Error("Invalid tab name format", map[string]any{"tab": tabName})
+		return m
+	}
+
+	connectionName := parts[0]
+	tableName := parts[len(parts)-1] // Use last part in case connection name has dots
+
+	driver, exists := m.dbConnections[connectionName]
+	if !exists {
+		logger.Error("No active connection", map[string]any{"connection": connectionName})
+		return m
+	}
+
+	// Extract database name
+	connections := m.Sidebar.GetConnections()
+	var dbName string
+	for _, conn := range connections {
+		if conn.Name == connectionName {
+			dbName = extractDatabaseName(conn.Host, conn.Type)
+			break
+		}
+	}
+
+	if dbName == "" {
+		logger.Error("Could not extract database name", nil)
+		return m
+	}
+
+	// Reload data with current pagination
+	pagination := drivers.Pagination{
+		Page:     m.currentPage,
+		PageSize: m.pageSize,
+	}
+
+	result, err := driver.GetTableDataPaginated(dbName, tableName, pagination)
+	if err != nil {
+		logger.Error("Failed to reload table data", map[string]any{"error": err.Error()})
+		return m
+	}
+
+	// Convert data to table.Row format (skip header row)
+	tableRows := make([]table.Row, len(result.Data)-1)
+	for i := 1; i < len(result.Data); i++ {
+		tableRows[i-1] = table.Row(result.Data[i])
+	}
+
+	// Update the table model
+	if tableModel, ok := activeTab.Content.(table.Model); ok {
+		tableModel.SetRows(tableRows)
+		tableModel.SetPagination(result.Page, result.TotalPages, result.TotalRows, result.PageSize)
+		m.Tabs.UpdateActiveTabContent(tableModel)
+	}
+
+	logger.Info("Table data reloaded", map[string]any{"rows": len(tableRows)})
 	return m
 }

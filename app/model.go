@@ -3,8 +3,11 @@ package app
 import (
 	"github.com/sheenazien8/sq/config"
 	"github.com/sheenazien8/sq/drivers"
+	"github.com/sheenazien8/sq/ui/modal"
+	"github.com/sheenazien8/sq/ui/modal-action"
 	"github.com/sheenazien8/sq/ui/modal-cell-preview"
 	"github.com/sheenazien8/sq/ui/modal-create-connection"
+	"github.com/sheenazien8/sq/ui/modal-edit-cell"
 	"github.com/sheenazien8/sq/ui/modal-exit"
 	"github.com/sheenazien8/sq/ui/modal-help"
 	"github.com/sheenazien8/sq/ui/sidebar"
@@ -27,6 +30,9 @@ const (
 	FocusExitModal
 	FocusCreateConnectionModal
 	FocusCellPreviewModal
+	FocusActionModal
+	FocusEditCellModal
+	FocusConfirmModal
 	FocusHelpModal
 )
 
@@ -37,6 +43,9 @@ type Model struct {
 	ExitModal             modalexit.Model
 	CreateConnectionModal modalcreateconnection.Model
 	CellPreviewModal      modalcellpreview.Model
+	ActionModal           modalaction.Model
+	EditCellModal         modaleditcell.Model
+	ConfirmModal          modal.Model
 	HelpModal             modalhelp.Model
 	Focus                 Focus
 
@@ -58,6 +67,10 @@ type Model struct {
 
 	// Key sequence state for multi-key commands
 	gPressed bool // Track if 'g' was pressed for 'gd' sequence
+
+	// Action confirmation state
+	confirmAction      modalaction.Action
+	confirmActionModal *modalaction.Model
 
 	TerminalWidth  int
 	TerminalHeight int
@@ -104,6 +117,9 @@ func New() Model {
 	exitModal := modalexit.New()
 	createConnectionModal := modalcreateconnection.New()
 	cellPreviewModal := modalcellpreview.New()
+	actionModal := modalaction.New()
+	editCellModal := modaleditcell.New()
+	confirmModal := modal.NewConfirm("Confirm Action", "Are you sure you want to perform this action?")
 	helpModal := modalhelp.New()
 	tabs := tab.New()
 
@@ -113,6 +129,9 @@ func New() Model {
 		ExitModal:             exitModal,
 		CreateConnectionModal: createConnectionModal,
 		CellPreviewModal:      cellPreviewModal,
+		ActionModal:           actionModal,
+		EditCellModal:         editCellModal,
+		ConfirmModal:          confirmModal,
 		HelpModal:             helpModal,
 		Focus:                 FocusSidebar,
 		dbConnections:         make(map[string]drivers.Driver),

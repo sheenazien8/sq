@@ -45,4 +45,7 @@ type Driver interface {
 
 	// Query execution
 	ExecuteQuery(query string) ([][]string, error)
+
+	// Identifier quoting
+	QuoteIdentifier(identifier string) string
 }
