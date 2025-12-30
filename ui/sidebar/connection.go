@@ -148,6 +148,7 @@ func (m *Model) HideFilterInput() {
 	m.filterInput.Blur()
 	// Adjust scrolling for new layout
 	m.adjustScrolling()
+	m.updateSelectedConnectionForCursor()
 }
 
 // adjustScrolling adjusts cursor and offset based on current visible items
@@ -174,6 +175,21 @@ func (m *Model) adjustScrolling() {
 	}
 }
 
+// updateSelectedConnectionForCursor updates the selected connection based on cursor position
+func (m *Model) updateSelectedConnectionForCursor() {
+	selectedItem := m.SelectedItem()
+	if selectedItem != nil {
+		// Update selected connection to match the connection containing the current cursor position
+		for i := range m.connections {
+			if i == selectedItem.ConnectionIndex {
+				m.connections[i].Selected = true
+			} else {
+				m.connections[i].Selected = false
+			}
+		}
+	}
+}
+
 // GetFilterText returns the current filter text
 func (m Model) GetFilterText() string {
 	return m.filterText
@@ -185,6 +201,7 @@ func (m *Model) SetFilterText(text string) {
 	// Reset cursor when filter changes
 	m.cursor = 0
 	m.offset = 0
+	m.updateSelectedConnectionForCursor()
 }
 
 // IsFilterVisible returns whether the sidebar filter is visible
@@ -414,6 +431,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				if m.cursor < m.offset {
 					m.offset = m.cursor
 				}
+				m.updateSelectedConnectionForCursor()
 			}
 		case "down", "j":
 			if m.cursor < len(treeItems)-1 {
@@ -421,14 +439,17 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				if m.cursor >= m.offset+m.visibleItems() {
 					m.offset = m.cursor - m.visibleItems() + 1
 				}
+				m.updateSelectedConnectionForCursor()
 			}
 		case "home":
 			m.cursor = 0
 			m.offset = 0
+			m.updateSelectedConnectionForCursor()
 		case "end":
 			m.cursor = max(0, len(treeItems)-1)
 			maxOffset := max(0, len(treeItems)-m.visibleItems())
 			m.offset = maxOffset
+			m.updateSelectedConnectionForCursor()
 		case "enter":
 			if m.cursor >= 0 && m.cursor < len(treeItems) {
 				item := treeItems[m.cursor]
@@ -471,6 +492,12 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				} else {
 					conn := &m.connections[item.ConnectionIndex]
 					table := &conn.Tables[item.TableIndex]
+
+					// Update the selected connection when a table is selected
+					for i := range m.connections {
+						m.connections[i].Selected = false
+					}
+					conn.Selected = true
 
 					logger.Debug("Selected table", map[string]any{
 						"connection": conn.Name,
