@@ -19,6 +19,7 @@ type Table struct {
 
 // Connection represents a database item in the sidebar
 type Connection struct {
+	ID        int64
 	Name      string
 	Type      string
 	Host      string
@@ -98,6 +99,7 @@ func getConnections() (data []Connection) {
 	for _, connection := range connections {
 		// Start with no tables - they will be loaded when connection is established
 		data = append(data, Connection{
+			ID:        connection.ID,
 			Name:      connection.Name,
 			Type:      connection.Driver,
 			Host:      connection.URL,

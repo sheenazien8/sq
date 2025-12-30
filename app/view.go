@@ -47,6 +47,14 @@ func (m Model) View() string {
 		return m.CreateConnectionModal.View()
 	}
 
+	if m.EditConnectionModal.Visible() {
+		return m.EditConnectionModal.View()
+	}
+
+	if m.DeleteConnectionModal.Visible() {
+		return m.DeleteConnectionModal.View()
+	}
+
 	if m.CellPreviewModal.Visible() {
 		return m.CellPreviewModal.View()
 	}

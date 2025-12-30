@@ -7,7 +7,9 @@ import (
 	"github.com/sheenazien8/sq/ui/modal-action"
 	"github.com/sheenazien8/sq/ui/modal-cell-preview"
 	"github.com/sheenazien8/sq/ui/modal-create-connection"
+	modaldeleteconnection "github.com/sheenazien8/sq/ui/modal-delete-connection"
 	"github.com/sheenazien8/sq/ui/modal-edit-cell"
+	modaleditconnection "github.com/sheenazien8/sq/ui/modal-edit-connection"
 	"github.com/sheenazien8/sq/ui/modal-exit"
 	"github.com/sheenazien8/sq/ui/modal-help"
 	"github.com/sheenazien8/sq/ui/sidebar"
@@ -29,6 +31,8 @@ const (
 	FocusSidebarFilter
 	FocusExitModal
 	FocusCreateConnectionModal
+	FocusEditConnectionModal
+	FocusDeleteConnectionModal
 	FocusCellPreviewModal
 	FocusActionModal
 	FocusEditCellModal
@@ -42,6 +46,8 @@ type Model struct {
 	Tabs                  tab.Model
 	ExitModal             modalexit.Model
 	CreateConnectionModal modalcreateconnection.Model
+	EditConnectionModal   modaleditconnection.Model
+	DeleteConnectionModal modaldeleteconnection.Model
 	CellPreviewModal      modalcellpreview.Model
 	ActionModal           modalaction.Model
 	EditCellModal         modaleditcell.Model
@@ -116,6 +122,8 @@ func New() Model {
 
 	exitModal := modalexit.New()
 	createConnectionModal := modalcreateconnection.New()
+	editConnectionModal := modaleditconnection.New()
+	deleteConnectionModal := modaldeleteconnection.New()
 	cellPreviewModal := modalcellpreview.New()
 	actionModal := modalaction.New()
 	editCellModal := modaleditcell.New()
@@ -128,6 +136,8 @@ func New() Model {
 		Tabs:                  tabs,
 		ExitModal:             exitModal,
 		CreateConnectionModal: createConnectionModal,
+		EditConnectionModal:   editConnectionModal,
+		DeleteConnectionModal: deleteConnectionModal,
 		CellPreviewModal:      cellPreviewModal,
 		ActionModal:           actionModal,
 		EditCellModal:         editCellModal,
