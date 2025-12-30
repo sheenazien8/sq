@@ -298,6 +298,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.ExitModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 		m.CreateConnectionModal.SetSize(m.TerminalWidth, m.TerminalHeight)
+		m.EditConnectionModal.SetSize(m.TerminalWidth, m.TerminalHeight)
+		m.DeleteConnectionModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 		m.CellPreviewModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 		m.ActionModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 		m.EditCellModal.SetSize(m.TerminalWidth, m.TerminalHeight)
@@ -373,6 +375,95 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 					// Refresh sidebar connections list after successful creation
 					m.Sidebar.RefreshConnections()
+				}
+				m.Focus = FocusSidebar
+				m.Sidebar.SetFocused(true)
+				m = m.updateFooter()
+			}
+			return m, tea.Batch(cmds...)
+		}
+
+		if m.EditConnectionModal.Visible() {
+			m.EditConnectionModal, cmd = m.EditConnectionModal.Update(msg)
+			cmds = append(cmds, cmd)
+
+			// Check if modal was closed
+			if !m.EditConnectionModal.Visible() {
+				// Check if user submitted the form
+				if m.EditConnectionModal.Result() == modal.ResultSubmit {
+					id := m.EditConnectionModal.GetConnectionID()
+					name, driverType, host, port, username, password, database, _ := m.EditConnectionModal.GetConnectionData()
+
+					// Build connection string from form data
+					var url string
+					if driverType == drivers.DriverTypeSQLite {
+						url = fmt.Sprintf("sqlite://%s", database)
+					} else if driverType == drivers.DriverTypePostgreSQL {
+						if password != "" {
+							url = fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", username, password, host, port, database)
+						} else {
+							url = fmt.Sprintf("postgres://%s@%s:%s/%s?sslmode=disable", username, host, port, database)
+						}
+					} else if driverType == drivers.DriverTypeMySQL {
+						if password != "" {
+							url = fmt.Sprintf("mysql://%s:%s@%s:%s/%s", username, password, host, port, database)
+						} else {
+							url = fmt.Sprintf("mysql://%s@%s:%s/%s", username, host, port, database)
+						}
+					}
+
+					err := storage.UpdateConnection(id, name, driverType, url)
+					if err != nil {
+						logger.Error(fmt.Sprintf("Failed to update connection: %s", err), map[string]any{
+							"id":     id,
+							"name":   name,
+							"driver": driverType,
+						})
+					} else {
+						logger.Info("Connection updated successfully", map[string]any{
+							"id":   id,
+							"name": name,
+						})
+						// Refresh sidebar connections list after successful update
+						m.Sidebar.RefreshConnections()
+					}
+				}
+				m.Focus = FocusSidebar
+				m.Sidebar.SetFocused(true)
+				m = m.updateFooter()
+			}
+			return m, tea.Batch(cmds...)
+		}
+
+		if m.DeleteConnectionModal.Visible() {
+			m.DeleteConnectionModal, cmd = m.DeleteConnectionModal.Update(msg)
+			cmds = append(cmds, cmd)
+
+			// Check if modal was closed
+			if !m.DeleteConnectionModal.Visible() {
+				// Check if user confirmed the deletion
+				if m.DeleteConnectionModal.Result() == modal.ResultSubmit {
+					id := m.DeleteConnectionModal.GetConnectionID()
+
+					err := storage.DeleteConnection(id)
+					if err != nil {
+						logger.Error(fmt.Sprintf("Failed to delete connection: %s", err), map[string]any{
+							"id": id,
+						})
+					} else {
+						logger.Info("Connection deleted successfully", map[string]any{
+							"id": id,
+						})
+						// Refresh sidebar connections list after successful deletion
+						m.Sidebar.RefreshConnections()
+						// Close any tabs associated with this connection
+						activeTab := m.Tabs.ActiveTab()
+						if activeTab != nil {
+							// Connection is typically in the tab name as "connectionName.tableName"
+							// If the tab is from the deleted connection, we could close it
+							// For now, we'll leave tabs open - user can close them manually
+						}
+					}
 				}
 				m.Focus = FocusSidebar
 				m.Sidebar.SetFocused(true)
@@ -615,6 +706,62 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Focus = FocusCreateConnectionModal
 				m = m.updateFooter()
 			}
+
+		case "w", "W": // Edit connection
+			if m.Focus == FocusSidebar {
+				selectedItem := m.Sidebar.SelectedItem()
+				// Can only edit connections (level 0), not tables (level 1)
+				if selectedItem != nil && selectedItem.Level == 0 {
+					connections := m.Sidebar.GetConnections()
+					if selectedItem.ConnectionIndex >= 0 && selectedItem.ConnectionIndex < len(connections) {
+						conn := connections[selectedItem.ConnectionIndex]
+
+						// Get the stored connection info from database
+						storedConn, err := storage.GetConnection(conn.ID)
+						if err != nil {
+							logger.Error("Failed to load connection details", map[string]any{
+								"name":  conn.Name,
+								"error": err.Error(),
+							})
+							return m, tea.Batch(cmds...)
+						}
+
+						// Parse connection URL to extract fields
+						host, port, username, password, database := parseConnectionURL(storedConn.URL, storedConn.Driver)
+
+						m.EditConnectionModal.Show(
+							storedConn.ID,
+							storedConn.Driver,
+							storedConn.Name,
+							host,
+							port,
+							username,
+							password,
+							database,
+							"",
+						)
+						m.Focus = FocusEditConnectionModal
+						m = m.updateFooter()
+					}
+				}
+			}
+
+		case "x", "X": // Delete connection
+			if m.Focus == FocusSidebar {
+				selectedItem := m.Sidebar.SelectedItem()
+				// Can only delete connections (level 0), not tables (level 1)
+				if selectedItem != nil && selectedItem.Level == 0 {
+					connections := m.Sidebar.GetConnections()
+					if selectedItem.ConnectionIndex >= 0 && selectedItem.ConnectionIndex < len(connections) {
+						conn := connections[selectedItem.ConnectionIndex]
+
+						m.DeleteConnectionModal.Show(conn.ID, conn.Name)
+						m.Focus = FocusDeleteConnectionModal
+						m = m.updateFooter()
+					}
+				}
+			}
+
 		case "tab":
 			// Only allow switching to main table if tabs are open
 			if m.Focus == FocusSidebar {
@@ -1161,7 +1308,7 @@ func (m Model) updateTabSize() Model {
 func (m Model) getFooterHelp() string {
 	switch m.Focus {
 	case FocusSidebar:
-		return "?: Help | j/k: Navigate | Enter: Select | e: Query | n: New | /: Filter | Tab: Switch | q: Quit"
+		return "?: Help | j/k: Navigate | Enter: Select | e: Query | n: New | w: Edit | x: Delete | /: Filter | Tab: Switch | q: Quit"
 	case FocusMain:
 		if m.Tabs.HasTabs() {
 			tabType := m.Tabs.GetActiveTabType()
@@ -1181,6 +1328,14 @@ func (m Model) getFooterHelp() string {
 		return "y: Yes | n/Esc: No | h/l: Switch"
 	case FocusCreateConnectionModal:
 		return "Tab: Next Field | Enter: Submit | Esc: Cancel"
+	case FocusEditConnectionModal:
+		return "Tab: Next Field | Enter: Update | Esc: Cancel"
+	case FocusDeleteConnectionModal:
+		return "Delete: Confirm | Esc: Cancel | y/n: Yes/No"
+	case FocusActionModal:
+		return "j/k: Navigate | Enter: Select | Esc: Cancel"
+	case FocusCellPreviewModal:
+		return "Esc: Close"
 	case FocusEditCellModal:
 		return "Enter: Confirm | Esc: Cancel"
 	case FocusConfirmModal:
@@ -1921,4 +2076,85 @@ func (m Model) reloadTableData() Model {
 
 	logger.Info("Table data reloaded", map[string]any{"rows": len(tableRows)})
 	return m
+}
+
+// parseConnectionURL extracts connection details from a connection URL
+func parseConnectionURL(url, driver string) (host, port, username, password, database string) {
+	// This is a simplified parser - for production, use net/url package properly
+	// Format examples:
+	// mysql://user:pass@host:port/database
+	// postgres://user:pass@host:port/database?sslmode=disable
+	// sqlite:///path/to/database.db
+
+	if driver == drivers.DriverTypeSQLite {
+		// For SQLite, the database field contains the file path
+		if strings.HasPrefix(url, "sqlite://") {
+			database = strings.TrimPrefix(url, "sqlite://")
+		}
+		return
+	}
+
+	// For MySQL and PostgreSQL, parse the URL
+	// Remove the driver prefix (mysql:// or postgres://)
+	var cleanURL string
+	if strings.HasPrefix(url, "mysql://") {
+		cleanURL = strings.TrimPrefix(url, "mysql://")
+	} else if strings.HasPrefix(url, "postgres://") {
+		cleanURL = strings.TrimPrefix(url, "postgres://")
+	} else {
+		return
+	}
+
+	// Split by @ to separate credentials from host:port/database
+	parts := strings.Split(cleanURL, "@")
+	if len(parts) >= 1 {
+		// Extract username and password
+		credsPart := parts[0]
+		if credsPart != "" {
+			credParts := strings.Split(credsPart, ":")
+			if len(credParts) >= 1 {
+				username = credParts[0]
+			}
+			if len(credParts) >= 2 {
+				password = credParts[1]
+			}
+		}
+	}
+
+	if len(parts) >= 2 {
+		// Extract host, port, and database
+		hostPart := parts[1]
+		// Remove query string if present
+		if idx := strings.Index(hostPart, "?"); idx >= 0 {
+			hostPart = hostPart[:idx]
+		}
+
+		// Split by / to separate host:port from database
+		slashIdx := strings.Index(hostPart, "/")
+		var hostPortPart, dbPart string
+		if slashIdx >= 0 {
+			hostPortPart = hostPart[:slashIdx]
+			dbPart = hostPart[slashIdx+1:]
+			database = dbPart
+		} else {
+			hostPortPart = hostPart
+		}
+
+		// Split host:port
+		colonIdx := strings.LastIndex(hostPortPart, ":")
+		if colonIdx >= 0 {
+			host = hostPortPart[:colonIdx]
+			port = hostPortPart[colonIdx+1:]
+		} else {
+			host = hostPortPart
+			// Set default port based on driver
+			if driver == drivers.DriverTypeMySQL {
+				port = "3306"
+			} else if driver == drivers.DriverTypePostgreSQL {
+				port = "5432"
+			}
+		}
+	}
+
+	return
 }
