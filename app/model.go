@@ -6,6 +6,7 @@ import (
 	"github.com/sheenazien8/sq/ui/modal"
 	"github.com/sheenazien8/sq/ui/modal-action"
 	"github.com/sheenazien8/sq/ui/modal-cell-preview"
+	"github.com/sheenazien8/sq/ui/modal-column-visibility"
 	"github.com/sheenazien8/sq/ui/modal-create-connection"
 	"github.com/sheenazien8/sq/ui/modal-edit-cell"
 	"github.com/sheenazien8/sq/ui/modal-exit"
@@ -47,6 +48,7 @@ type Model struct {
 	EditCellModal         modaleditcell.Model
 	ConfirmModal          modal.Model
 	HelpModal             modalhelp.Model
+	ColumnVisibilityModal modal.Model
 	Focus                 Focus
 
 	allRows     []table.Row
@@ -121,6 +123,8 @@ func New() Model {
 	editCellModal := modaleditcell.New()
 	confirmModal := modal.NewConfirm("Confirm Action", "Are you sure you want to perform this action?")
 	helpModal := modalhelp.New()
+	columnVisibilityContent := modalcolumnvisibility.New()
+	columnVisibilityModal := modal.New("Column Visibility", columnVisibilityContent)
 	tabs := tab.New()
 
 	return Model{
@@ -133,6 +137,7 @@ func New() Model {
 		EditCellModal:         editCellModal,
 		ConfirmModal:          confirmModal,
 		HelpModal:             helpModal,
+		ColumnVisibilityModal: columnVisibilityModal,
 		Focus:                 FocusSidebar,
 		dbConnections:         make(map[string]drivers.Driver),
 		themeIndex:            themeIdx,

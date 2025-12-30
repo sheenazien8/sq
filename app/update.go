@@ -14,6 +14,7 @@ import (
 	"github.com/sheenazien8/sq/ui/filter"
 	"github.com/sheenazien8/sq/ui/modal"
 	"github.com/sheenazien8/sq/ui/modal-action"
+	modalcolumnvisibility "github.com/sheenazien8/sq/ui/modal-column-visibility"
 	queryeditor "github.com/sheenazien8/sq/ui/query-editor"
 	"github.com/sheenazien8/sq/ui/sidebar"
 	"github.com/sheenazien8/sq/ui/tab"
@@ -76,6 +77,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				logger.Error("Failed to copy query to clipboard", map[string]any{"error": err.Error()})
 			} else {
 				logger.Info("Query copied to clipboard", map[string]any{"length": len(msg.Content)})
+			}
+		}
+		return m, nil
+
+	case modalcolumnvisibility.ColumnVisibilityToggleMsg:
+		// Apply column visibility changes
+		if m.Tabs.HasTabs() && m.Tabs.GetActiveTabType() == tab.TabTypeTable {
+			activeTab := m.Tabs.ActiveTab()
+			if activeTab != nil {
+				if tableModel, ok := activeTab.Content.(table.Model); ok {
+					tableModel.SetColumnVisibility(msg.VisibilityMap)
+					activeTab.Content = tableModel
+					m.Tabs.UpdateActiveTabContent(activeTab.Content)
+				}
 			}
 		}
 		return m, nil
@@ -303,6 +318,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.EditCellModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 		m.ConfirmModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 		m.HelpModal.SetSize(m.TerminalWidth, m.TerminalHeight)
+		m.ColumnVisibilityModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 
 	case tea.KeyMsg:
 		if m.ExitModal.Visible() {
@@ -516,6 +532,46 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 		}
 
+		if m.ColumnVisibilityModal.Visible() {
+			m.ColumnVisibilityModal, cmd = m.ColumnVisibilityModal.Update(msg)
+			cmds = append(cmds, cmd)
+
+			// Check if modal was closed
+			if !m.ColumnVisibilityModal.Visible() {
+				// Check if there was a confirmation (ResultSubmit)
+				if m.ColumnVisibilityModal.Result() == modal.ResultSubmit {
+					// Apply column visibility changes to the active table
+					if m.Tabs.HasTabs() && m.Tabs.GetActiveTabType() == tab.TabTypeTable {
+						activeTab := m.Tabs.ActiveTab()
+						if activeTab != nil {
+							if tableModel, ok := activeTab.Content.(table.Model); ok {
+								// Get the visibility map from the modal content
+								columnVisContent := m.ColumnVisibilityModal.Content.(*modalcolumnvisibility.ColumnVisibilityContent)
+								visibilityMap := columnVisContent.GetVisibility()
+								// Apply to table
+								tableModel.SetColumnVisibility(visibilityMap)
+								// Update the active tab with modified table
+								activeTab.Content = tableModel
+								m.Tabs.UpdateActiveTabContent(activeTab.Content)
+							}
+						}
+					}
+				}
+
+				// Return to previous focus
+				if m.Tabs.HasTabs() {
+					m.Focus = FocusMain
+					m.Sidebar.SetFocused(false)
+					m.Tabs.SetFocused(true)
+				} else {
+					m.Focus = FocusSidebar
+					m.Sidebar.SetFocused(true)
+				}
+				m = m.updateFooter()
+			}
+			return m, tea.Batch(cmds...)
+		}
+
 		// If query editor is active, pass most keys directly to it
 		// Only intercept specific control keys for app-level navigation
 		if m.Focus == FocusMain && m.Tabs.HasTabs() && m.Tabs.GetActiveTabType() == tab.TabTypeQuery {
@@ -578,6 +634,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.HelpModal.Show()
 			m.Focus = FocusHelpModal
 			m = m.updateFooter()
+			return m, nil
+
+		case "ctrl+t":
+			// Show column visibility modal
+			if m.Focus == FocusMain && m.Tabs.HasTabs() && m.Tabs.GetActiveTabType() == tab.TabTypeTable {
+				// Get the current table model and set columns on the modal
+				activeTab := m.Tabs.ActiveTab()
+				if activeTab != nil {
+					if tableModel, ok := activeTab.Content.(table.Model); ok {
+						columnVisContent := m.ColumnVisibilityModal.Content.(*modalcolumnvisibility.ColumnVisibilityContent)
+						columnVisContent.Reset()
+						columnVisContent.SetColumns(tableModel.GetAllColumns())
+						m.ColumnVisibilityModal.Show()
+						m.ColumnVisibilityModal.SetSize(m.TerminalWidth, m.TerminalHeight)
+					}
+				}
+			}
 			return m, nil
 
 		case "ctrl+c", "q":
@@ -1280,8 +1353,9 @@ func (m *Model) goToForeignKeyDefinition() error {
 
 	// Get selected cell value and column index
 	selectedRow := tableModel.SelectedRow()
-	cursorCol := tableModel.CursorCol()
-	if cursorCol < 0 || cursorCol >= len(selectedRow) {
+	// Get the original column index (not the visible column index)
+	originalColIdx := tableModel.GetSelectedColumnOriginalIndex()
+	if originalColIdx < 0 || originalColIdx >= len(selectedRow) {
 		return fmt.Errorf("invalid column selection")
 	}
 
@@ -1328,8 +1402,8 @@ func (m *Model) goToForeignKeyDefinition() error {
 
 	// Find the column and check if it's a foreign key
 	var columnName string
-	if cursorCol < len(structure.Columns) {
-		columnName = structure.Columns[cursorCol].Name
+	if originalColIdx < len(structure.Columns) {
+		columnName = structure.Columns[originalColIdx].Name
 	}
 
 	var referencedTable, referencedColumn string

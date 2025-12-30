@@ -28,6 +28,9 @@ type Column struct {
 	IsForeignKey     bool
 	ReferencedTable  string
 	ReferencedColumn string
+
+	// Column visibility
+	Hidden bool
 }
 
 // Row is a slice of strings representing a table row
@@ -71,11 +74,15 @@ type Model struct {
 	// Sort state
 	sortColumnIdx int
 	sortDirection SortDirection
+
+	// Column visibility state
+	// visibleColumnIndices maps display index to actual column index
+	visibleColumnIndices []int
 }
 
 // New creates a new table model
 func New(columns []Column, rows []Row) Model {
-	return Model{
+	m := Model{
 		columns:     columns,
 		rows:        rows,
 		colOffset:   0,
@@ -87,6 +94,24 @@ func New(columns []Column, rows []Row) Model {
 		totalPages:  1,
 		totalRows:   len(rows),
 		pageSize:    100,
+	}
+	m.buildVisibleColumnIndices()
+	return m
+}
+
+// buildVisibleColumnIndices builds the list of visible column indices
+func (m *Model) buildVisibleColumnIndices() {
+	m.visibleColumnIndices = []int{}
+	for i := range m.columns {
+		if !m.columns[i].Hidden {
+			m.visibleColumnIndices = append(m.visibleColumnIndices, i)
+		}
+	}
+	// Ensure cursor is on a visible column
+	if len(m.visibleColumnIndices) == 0 {
+		m.cursorCol = 0
+	} else if m.cursorCol >= len(m.visibleColumnIndices) {
+		m.cursorCol = len(m.visibleColumnIndices) - 1
 	}
 }
 
@@ -156,11 +181,22 @@ func (m Model) SelectedRow() Row {
 func (m Model) SelectedCell() string {
 	if m.cursorRow >= 0 && m.cursorRow < len(m.rows) {
 		row := m.rows[m.cursorRow]
-		if m.cursorCol >= 0 && m.cursorCol < len(row) {
-			return row[m.cursorCol]
+		if m.cursorCol >= 0 && m.cursorCol < len(m.visibleColumnIndices) {
+			originalIdx := m.visibleColumnIndices[m.cursorCol]
+			if originalIdx >= 0 && originalIdx < len(row) {
+				return row[originalIdx]
+			}
 		}
 	}
 	return ""
+}
+
+// GetSelectedColumnOriginalIndex returns the original column index of the currently selected column
+func (m Model) GetSelectedColumnOriginalIndex() int {
+	if m.cursorCol >= 0 && m.cursorCol < len(m.visibleColumnIndices) {
+		return m.visibleColumnIndices[m.cursorCol]
+	}
+	return -1
 }
 
 // SetRows updates the table rows
@@ -178,9 +214,10 @@ func (m *Model) SetRows(rows []Row) {
 // SetColumns updates the table columns
 func (m *Model) SetColumns(columns []Column) {
 	m.columns = columns
+	m.buildVisibleColumnIndices()
 	// Ensure cursorCol is valid
-	if m.cursorCol >= len(columns) {
-		m.cursorCol = max(0, len(columns)-1)
+	if m.cursorCol >= len(m.visibleColumnIndices) {
+		m.cursorCol = max(0, len(m.visibleColumnIndices)-1)
 	}
 }
 
@@ -213,22 +250,65 @@ func (m Model) GetSortColumnName() string {
 	return m.columns[m.sortColumnIdx].Title
 }
 
+// GetVisibleColumns returns a slice of visible columns
+func (m Model) GetVisibleColumns() []Column {
+	var visible []Column
+	for _, idx := range m.visibleColumnIndices {
+		visible = append(visible, m.columns[idx])
+	}
+	return visible
+}
+
+// GetAllColumns returns all columns (including hidden ones)
+func (m Model) GetAllColumns() []Column {
+	return m.columns
+}
+
+// ToggleColumnVisibility toggles the visibility of a column by original index
+func (m *Model) ToggleColumnVisibility(originalIdx int) {
+	if originalIdx < 0 || originalIdx >= len(m.columns) {
+		return
+	}
+	m.columns[originalIdx].Hidden = !m.columns[originalIdx].Hidden
+	m.buildVisibleColumnIndices()
+}
+
+// SetColumnVisibility sets the visibility of all columns using a map of original indices
+func (m *Model) SetColumnVisibility(visibilityMap map[int]bool) {
+	for i := range m.columns {
+		if visible, ok := visibilityMap[i]; ok {
+			m.columns[i].Hidden = !visible
+		}
+	}
+	m.buildVisibleColumnIndices()
+}
+
+// GetColumnVisibility returns a map of original column index to visibility
+func (m Model) GetColumnVisibility() map[int]bool {
+	visibility := make(map[int]bool)
+	for i := range m.columns {
+		visibility[i] = !m.columns[i].Hidden
+	}
+	return visibility
+}
+
 // visibleRows returns the number of rows that can be displayed
 func (m Model) visibleRows() int {
 	return max(0, m.height)
 }
 
-// visibleCols calculates how many columns fit in the current width
+// visibleCols calculates how many visible columns fit in the current width
 func (m Model) visibleCols() int {
-	if len(m.columns) == 0 {
+	if len(m.visibleColumnIndices) == 0 {
 		return 0
 	}
 
 	usedWidth := 0
 	count := 0
 
-	for i := m.colOffset; i < len(m.columns); i++ {
-		colWidth := m.getEffectiveColumnWidth(i) + 3 // +3 for padding and separator
+	for i := m.colOffset; i < len(m.visibleColumnIndices); i++ {
+		originalIdx := m.visibleColumnIndices[i]
+		colWidth := m.getEffectiveColumnWidth(originalIdx) + 3 // +3 for padding and separator
 		if usedWidth+colWidth > m.width {
 			break
 		}
@@ -250,7 +330,7 @@ func (m Model) maxRowOffset() int {
 
 // maxColOffset returns the maximum horizontal scroll offset
 func (m Model) maxColOffset() int {
-	return max(0, len(m.columns)-1)
+	return max(0, len(m.visibleColumnIndices)-1)
 }
 
 // Update handles input
@@ -310,7 +390,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				}
 			}
 		case "right", "l":
-			if m.cursorCol < len(m.columns)-1 {
+			if m.cursorCol < len(m.visibleColumnIndices)-1 {
 				m.cursorCol++
 				// Adjust column offset if cursor goes off screen
 				visibleCols := m.visibleCols()
@@ -322,11 +402,11 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			m.cursorCol = 0
 			m.colOffset = 0
 		case "L":
-			m.cursorCol = len(m.columns) - 1
+			m.cursorCol = len(m.visibleColumnIndices) - 1
 			// Adjust column offset to show the last columns
 			visibleCols := m.visibleCols()
-			if len(m.columns) > visibleCols {
-				m.colOffset = len(m.columns) - visibleCols
+			if len(m.visibleColumnIndices) > visibleCols {
+				m.colOffset = len(m.visibleColumnIndices) - visibleCols
 			} else {
 				m.colOffset = 0
 			}
@@ -351,14 +431,14 @@ func (m Model) View() string {
 
 	// Calculate visible columns
 	visibleColCount := m.visibleCols()
-	endCol := min(m.colOffset+visibleColCount, len(m.columns))
+	endColOffset := min(m.colOffset+visibleColCount, len(m.visibleColumnIndices))
 
 	// Render header
-	headerLine := m.renderHeaderLine(m.colOffset, endCol)
+	headerLine := m.renderHeaderLine(m.colOffset, endColOffset)
 	lines = append(lines, headerLine)
 
 	// Render separator
-	separatorLine := m.renderSeparator(m.colOffset, endCol)
+	separatorLine := m.renderSeparator(m.colOffset, endColOffset)
 	lines = append(lines, separatorLine)
 
 	// Render data rows
@@ -366,13 +446,13 @@ func (m Model) View() string {
 	endRow := min(m.rowOffset+visibleRowCount, len(m.rows))
 
 	for i := m.rowOffset; i < endRow; i++ {
-		rowLine := m.renderDataRow(i, m.colOffset, endCol)
+		rowLine := m.renderDataRow(i, m.colOffset, endColOffset)
 		lines = append(lines, rowLine)
 	}
 
 	// Fill empty rows if needed
 	for i := endRow - m.rowOffset; i < visibleRowCount; i++ {
-		emptyLine := m.renderEmptyRow(m.colOffset, endCol)
+		emptyLine := m.renderEmptyRow(m.colOffset, endColOffset)
 		lines = append(lines, emptyLine)
 	}
 
@@ -384,17 +464,18 @@ func (m Model) View() string {
 }
 
 // renderHeaderLine renders the header row
-func (m Model) renderHeaderLine(startCol, endCol int) string {
+func (m Model) renderHeaderLine(startColIdx, endColIdx int) string {
 	t := theme.Current
 	var cells []string
 
-	for i := startCol; i < endCol; i++ {
-		col := m.columns[i]
-		effectiveWidth := m.getEffectiveColumnWidth(i)
+	for i := startColIdx; i < endColIdx; i++ {
+		originalIdx := m.visibleColumnIndices[i]
+		col := m.columns[originalIdx]
+		effectiveWidth := m.getEffectiveColumnWidth(originalIdx)
 		cellText := col.Title
 
 		// Add sort indicator to the left if this column is sorted
-		if i == m.sortColumnIdx && m.sortDirection != SortNone {
+		if originalIdx == m.sortColumnIdx && m.sortDirection != SortNone {
 			sortIcon := "↑ "
 			if m.sortDirection == SortDesc {
 				sortIcon = "↓ "
@@ -425,13 +506,14 @@ func (m Model) renderHeaderLine(startCol, endCol int) string {
 }
 
 // renderSeparator renders the separator between header and data
-func (m Model) renderSeparator(startCol, endCol int) string {
+func (m Model) renderSeparator(startColIdx, endColIdx int) string {
 	t := theme.Current
 	separatorStyle := lipgloss.NewStyle().Foreground(t.Colors.BorderUnfocused)
 
 	var parts []string
-	for i := startCol; i < endCol; i++ {
-		effectiveWidth := m.getEffectiveColumnWidth(i)
+	for i := startColIdx; i < endColIdx; i++ {
+		originalIdx := m.visibleColumnIndices[i]
+		effectiveWidth := m.getEffectiveColumnWidth(originalIdx)
 		parts = append(parts, strings.Repeat("─", effectiveWidth+2))
 	}
 
@@ -447,17 +529,18 @@ func (m Model) renderSeparator(startCol, endCol int) string {
 }
 
 // renderDataRow renders a single data row
-func (m Model) renderDataRow(rowIdx, startCol, endCol int) string {
+func (m Model) renderDataRow(rowIdx, startColIdx, endColIdx int) string {
 	t := theme.Current
 	var cells []string
 	row := m.rows[rowIdx]
 	isSelectedRow := rowIdx == m.cursorRow
 
-	for i := startCol; i < endCol; i++ {
-		effectiveWidth := m.getEffectiveColumnWidth(i)
+	for i := startColIdx; i < endColIdx; i++ {
+		originalIdx := m.visibleColumnIndices[i]
+		effectiveWidth := m.getEffectiveColumnWidth(originalIdx)
 		cellContent := ""
-		if i < len(row) {
-			cellContent = row[i]
+		if originalIdx < len(row) {
+			cellContent = row[originalIdx]
 		}
 
 		cellText := truncateOrPad(cellContent, effectiveWidth)
@@ -485,12 +568,13 @@ func (m Model) renderDataRow(rowIdx, startCol, endCol int) string {
 }
 
 // renderEmptyRow renders an empty row for padding
-func (m Model) renderEmptyRow(startCol, endCol int) string {
+func (m Model) renderEmptyRow(startColIdx, endColIdx int) string {
 	t := theme.Current
 	var cells []string
 
-	for i := startCol; i < endCol; i++ {
-		effectiveWidth := m.getEffectiveColumnWidth(i)
+	for i := startColIdx; i < endColIdx; i++ {
+		originalIdx := m.visibleColumnIndices[i]
+		effectiveWidth := m.getEffectiveColumnWidth(originalIdx)
 		cell := t.TableCell.Render(" " + strings.Repeat(" ", effectiveWidth) + " ")
 		cells = append(cells, cell)
 	}
@@ -511,7 +595,11 @@ func (m Model) renderEmptyRow(startCol, endCol int) string {
 func (m Model) renderStatusBar() string {
 	t := theme.Current
 
-	leftInfo := t.StatusBar.Render("Row " + intToStr(m.cursorRow+1) + "/" + intToStr(len(m.rows)) + ", Col " + intToStr(m.cursorCol+1) + "/" + intToStr(len(m.columns)))
+	visibleCount := len(m.visibleColumnIndices)
+
+	colInfo := "Col " + intToStr(m.cursorCol+1) + "/" + intToStr(visibleCount)
+
+	leftInfo := t.StatusBar.Render("Row " + intToStr(m.cursorRow+1) + "/" + intToStr(len(m.rows)) + ", " + colInfo)
 
 	// Build right info with pagination
 	var rightParts []string

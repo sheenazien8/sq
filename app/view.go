@@ -67,6 +67,10 @@ func (m Model) View() string {
 		return m.HelpModal.View()
 	}
 
+	if m.ColumnVisibilityModal.Visible() {
+		return m.ColumnVisibilityModal.View()
+	}
+
 	t := theme.Current
 
 	var sidebarView string
