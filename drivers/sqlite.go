@@ -74,13 +74,12 @@ func (db *SQLite) TestConnection(urlstr string) error {
 	}
 	defer conn.Close()
 
-	// Enable foreign keys support
-	_, err = conn.Exec("PRAGMA foreign_keys = ON")
-	if err != nil {
-		return err
-	}
-
 	return conn.Ping()
+}
+
+// QuoteIdentifier quotes an identifier for SQLite (uses double quotes)
+func (db *SQLite) QuoteIdentifier(identifier string) string {
+	return `"` + strings.ReplaceAll(identifier, `"`, `""`) + `"`
 }
 
 // GetTables returns all tables in the SQLite database

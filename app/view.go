@@ -51,6 +51,18 @@ func (m Model) View() string {
 		return m.CellPreviewModal.View()
 	}
 
+	if m.ActionModal.Visible() {
+		return m.ActionModal.View()
+	}
+
+	if m.EditCellModal.Visible() {
+		return m.EditCellModal.View()
+	}
+
+	if m.ConfirmModal.Visible() {
+		return m.ConfirmModal.View()
+	}
+
 	if m.HelpModal.Visible() {
 		return m.HelpModal.View()
 	}

@@ -80,6 +80,7 @@ func NewHelpContent() *HelpContent {
 					{"Space", "Sort by column (toggle ASC/DESC)"},
 					{"y", "Yank (copy) cell"},
 					{"p", "Preview cell content"},
+					{"a", "Cell actions menu"},
 					{"gd", "Go to definition (FK)"},
 					{"/", "Focus filter"},
 					{"C", "Clear filter"},

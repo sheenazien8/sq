@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"strconv"
+	"strings"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/sheenazien8/sq/logger"
@@ -43,6 +44,11 @@ func (db *MySQL) TestConnection(urlstr string) error {
 	defer conn.Close()
 
 	return conn.Ping()
+}
+
+// QuoteIdentifier quotes an identifier for MySQL (uses backticks)
+func (db *MySQL) QuoteIdentifier(identifier string) string {
+	return "`" + strings.ReplaceAll(identifier, "`", "``") + "`"
 }
 
 func (db *MySQL) GetTables(database string) (map[string][]string, error) {
