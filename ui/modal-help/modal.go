@@ -82,6 +82,7 @@ func NewHelpContent() *HelpContent {
 					{"p", "Preview cell content"},
 					{"a", "Cell actions menu"},
 					{"gd", "Go to definition (FK)"},
+					{"Ctrl+T", "Toggle column visibility"},
 					{"/", "Focus filter"},
 					{"C", "Clear filter"},
 					{"e", "Open query editor"},
