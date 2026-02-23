@@ -40,7 +40,7 @@ func main() {
 	// Handle create connection flag
 	if *createConnFlag {
 		if err := handleCreateConnection(*connDriver, *connName, *connHost, *connPort, *connUser, *connPass, *connDB); err != nil {
-			fmt.Printf("Error creating connection: %v\n", err)
+			fmt.Printf("Failed to create connection: %v\n", err)
 			os.Exit(1)
 		}
 		fmt.Println("Connection created successfully!")
@@ -88,15 +88,15 @@ func handleCreateConnection(driver, name, host, port, user, password, database s
 		drivers.DriverTypeSQLite:     true,
 	}
 	if !supportedDrivers[driver] {
-		return fmt.Errorf("unsupported driver: %s (supported: mysql, postgresql, sqlite)", driver)
+		return fmt.Errorf("Unsupported driver: %s. Supported: mysql, postgresql, sqlite.", driver)
 	}
 
 	// Validate required fields
 	if name == "" {
-		return fmt.Errorf("connection name is required (--name)")
+		return fmt.Errorf("Missing required flag: --name.")
 	}
 	if database == "" {
-		return fmt.Errorf("database name/path is required (--database)")
+		return fmt.Errorf("Missing required flag: --database.")
 	}
 
 	// Validate driver-specific fields
@@ -105,19 +105,19 @@ func handleCreateConnection(driver, name, host, port, user, password, database s
 	} else if driver == drivers.DriverTypeMySQL || driver == drivers.DriverTypePostgreSQL {
 		// MySQL and PostgreSQL need user and database
 		if user == "" {
-			return fmt.Errorf("database user is required (--user)")
+			return fmt.Errorf("Missing required flag: --user.")
 		}
 	}
 
 	// Initialize storage
 	if err := storage.Init(); err != nil {
-		return fmt.Errorf("failed to initialize storage: %w", err)
+		return fmt.Errorf("Failed to initialize storage: %w", err)
 	}
 	defer storage.Close()
 
 	// Setup logger (minimal for CLI usage)
 	if err := logger.SetFile("debug.log"); err != nil {
-		return fmt.Errorf("failed to setup logger: %w", err)
+		return fmt.Errorf("Failed to setup logger: %w", err)
 	}
 
 	// Build connection URL based on driver

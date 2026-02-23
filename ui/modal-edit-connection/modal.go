@@ -128,36 +128,36 @@ func (c *Content) LoadConnection(id int64, driverType, name, host, port, usernam
 // validate checks if the connection fields are valid
 func (c *Content) validate() string {
 	if name := c.fields.nameInput.Value(); name == "" {
-		return "Connection name is required"
+		return "Name is required."
 	}
 
 	// SQLite only needs name and file path
 	if c.driverType == drivers.DriverTypeSQLite {
 		if filePath := c.fields.databaseInput.Value(); filePath == "" {
-			return "File path is required"
+			return "File path is required."
 		}
 		return ""
 	}
 
 	// MySQL, PostgreSQL need host, port, username, and database
 	if host := c.fields.hostInput.Value(); host == "" {
-		return "Host is required"
+		return "Host is required."
 	}
 
 	if portStr := c.fields.portInput.Value(); portStr == "" {
-		return "Port is required"
+		return "Port is required."
 	} else if port, err := strconv.Atoi(portStr); err != nil {
-		return "Port must be a valid number"
+		return "Port must be a number."
 	} else if port < 1 || port > 65535 {
-		return "Port must be between 1 and 65535"
+		return "Port must be between 1 and 65535."
 	}
 
 	if username := c.fields.usernameInput.Value(); username == "" {
-		return "Username is required"
+		return "Username is required."
 	}
 
 	if database := c.fields.databaseInput.Value(); database == "" {
-		return "Database name is required"
+		return "Database name is required."
 	}
 
 	return ""
@@ -413,10 +413,10 @@ func (c *Content) View() string {
 	var errorRow string
 	if c.errorMsg != "" {
 		errorStyle := lipgloss.NewStyle().
-			Foreground(t.Colors.Primary).
+			Foreground(t.Colors.Error).
 			Align(lipgloss.Center).
 			Padding(0, 0, 1, 0)
-		errorRow = errorStyle.Render("Error: " + c.errorMsg)
+		errorRow = errorStyle.Render(c.errorMsg)
 	}
 
 	// Buttons

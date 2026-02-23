@@ -170,36 +170,36 @@ func (c *Content) validate() string {
 	fields := c.getCurrentFields()
 
 	if name := fields.nameInput.Value(); name == "" {
-		return "Connection name is required"
+		return "Name is required."
 	}
 
 	// SQLite only needs name and file path
 	if c.GetDriver() == drivers.DriverTypeSQLite {
 		if filePath := fields.databaseInput.Value(); filePath == "" {
-			return "File path is required"
+			return "File path is required."
 		}
 		return ""
 	}
 
 	// MySQL and PostgreSQL need host, port, username, and database
 	if host := fields.hostInput.Value(); host == "" {
-		return "Host is required"
+		return "Host is required."
 	}
 
 	if portStr := fields.portInput.Value(); portStr == "" {
-		return "Port is required"
+		return "Port is required."
 	} else if port, err := strconv.Atoi(portStr); err != nil {
-		return "Port must be a valid number"
+		return "Port must be a number."
 	} else if port < 1 || port > 65535 {
-		return "Port must be between 1 and 65535"
+		return "Port must be between 1 and 65535."
 	}
 
 	if username := fields.usernameInput.Value(); username == "" {
-		return "Username is required"
+		return "Username is required."
 	}
 
 	if database := fields.databaseInput.Value(); database == "" {
-		return "Database name is required"
+		return "Database name is required."
 	}
 
 	return ""
@@ -388,7 +388,7 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 
 				connStr := c.BuildConnectionString()
 				if err := driver.TestConnection(connStr); err != nil {
-					c.errorMsg = "Connection failed: " + err.Error()
+					c.errorMsg = "Connection test failed: " + err.Error()
 					return c, nil
 				}
 
@@ -569,10 +569,10 @@ func (c *Content) View() string {
 	var errorRow string
 	if c.errorMsg != "" {
 		errorStyle := lipgloss.NewStyle().
-			Foreground(t.Colors.Primary).
+			Foreground(t.Colors.Error).
 			Align(lipgloss.Center).
 			Padding(0, 0, 1, 0)
-		errorRow = errorStyle.Render("Error: " + c.errorMsg)
+		errorRow = errorStyle.Render(c.errorMsg)
 	}
 
 	// Buttons

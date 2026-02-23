@@ -43,6 +43,10 @@ func (m Model) View() string {
 		return m.ExitModal.View()
 	}
 
+	if m.AlertModal.Visible() {
+		return m.AlertModal.View()
+	}
+
 	if m.CreateConnectionModal.Visible() {
 		return m.CreateConnectionModal.View()
 	}

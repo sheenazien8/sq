@@ -42,7 +42,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				"connection": msg.ConnectionName,
 				"error":      err.Error(),
 			})
-			// TODO: Show error message to user
+			m = m.showAlert("Failed to connect to \"" + msg.ConnectionName + "\": " + err.Error())
 			return m, nil
 		}
 
@@ -157,7 +157,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			logger.Error("No active connection for query", map[string]any{
 				"connection": msg.ConnectionName,
 			})
-			m.Tabs.SetQueryError("No active connection: " + msg.ConnectionName)
+			m.Tabs.SetQueryError("No active connection named \"" + msg.ConnectionName + "\".")
 			return m, nil
 		}
 
@@ -167,7 +167,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			logger.Error("Query execution failed", map[string]any{
 				"error": err.Error(),
 			})
-			m.Tabs.SetQueryError(err.Error())
+			m.Tabs.SetQueryError("Query failed: " + err.Error())
 			return m, nil
 		}
 
@@ -219,7 +219,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				"table":      msg.TableName,
 				"error":      err.Error(),
 			})
-			// TODO: Show error message to user
+			m = m.showAlert("Failed to load table \"" + msg.TableName + "\": " + err.Error())
 			return m, nil
 		}
 
@@ -319,10 +319,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ActionModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 		m.EditCellModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 		m.ConfirmModal.SetSize(m.TerminalWidth, m.TerminalHeight)
+		m.AlertModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 		m.HelpModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 		m.ColumnVisibilityModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 
 	case tea.KeyMsg:
+		if m.AlertModal.Visible() {
+			m.AlertModal, cmd = m.AlertModal.Update(msg)
+			cmds = append(cmds, cmd)
+			if !m.AlertModal.Visible() {
+				m.Focus = m.previousFocus
+				switch m.Focus {
+				case FocusSidebar:
+					m.Sidebar.SetFocused(true)
+					m.Tabs.SetFocused(false)
+				case FocusMain:
+					m.Sidebar.SetFocused(false)
+					m.Tabs.SetFocused(true)
+				default:
+					m.Sidebar.SetFocused(false)
+					m.Tabs.SetFocused(false)
+				}
+				m = m.updateFooter()
+			}
+			return m, tea.Batch(cmds...)
+		}
+
 		if m.ExitModal.Visible() {
 			m.ExitModal, cmd = m.ExitModal.Update(msg)
 			cmds = append(cmds, cmd)
@@ -384,6 +406,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							"driver": driver,
 							"url":    url,
 						})
+						m = m.showAlert("Failed to create connection: " + err.Error())
 						m.Focus = FocusCreateConnectionModal
 						m.CreateConnectionModal.Show()
 						return m, tea.Batch(cmds...)
@@ -435,6 +458,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							"name":   name,
 							"driver": driverType,
 						})
+						m = m.showAlert("Failed to update connection: " + err.Error())
 					} else {
 						logger.Info("Connection updated successfully", map[string]any{
 							"id":   id,
@@ -466,6 +490,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						logger.Error(fmt.Sprintf("Failed to delete connection: %s", err), map[string]any{
 							"id": id,
 						})
+						m = m.showAlert("Failed to delete connection: " + err.Error())
 					} else {
 						logger.Info("Connection deleted successfully", map[string]any{
 							"id": id,
@@ -796,6 +821,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 								"name":  conn.Name,
 								"error": err.Error(),
 							})
+							m = m.showAlert("Failed to load connection details: " + err.Error())
 							return m, tea.Batch(cmds...)
 						}
 
@@ -945,6 +971,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						err := clipboard.WriteAll(cellContent)
 						if err != nil {
 							logger.Error("Failed to copy to clipboard", map[string]any{"error": err.Error()})
+							m = m.showAlert("Failed to copy to clipboard: " + err.Error())
 						} else {
 							logger.Info("Cell content copied to clipboard", map[string]any{"length": len(cellContent)})
 						}
@@ -963,6 +990,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				err := m.goToForeignKeyDefinition()
 				if err != nil {
 					logger.Error("Failed to go to foreign key definition", map[string]any{"error": err.Error()})
+					m = m.showAlert("Failed to go to foreign key: " + err.Error())
 				} else {
 					// Update filter UI for the new tab
 
@@ -978,6 +1006,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				err := m.loadTableStructure()
 				if err != nil {
 					logger.Error("Failed to load table structure", map[string]any{"error": err.Error()})
+					m = m.showAlert("Failed to load table structure: " + err.Error())
 				} else {
 					// Update filter UI for the new tab (structure tabs have no filter)
 
@@ -1001,6 +1030,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						err := m.loadTableStructure()
 						if err != nil {
 							logger.Error("Failed to load table structure", map[string]any{"error": err.Error()})
+							m = m.showAlert("Failed to load table structure: " + err.Error())
 						} else {
 							// Switch focus to main area
 							m.Focus = FocusMain
@@ -1324,7 +1354,7 @@ func (m Model) applyFilterToActiveTab() Model {
 		logger.Error("Failed to load filtered data", map[string]any{
 			"error": err.Error(),
 		})
-		return m
+		return m.showAlert("Failed to load filtered data: " + err.Error())
 	}
 
 	// Convert data to table.Row format (skip header row)
@@ -1377,6 +1407,22 @@ func (m Model) updateTabSize() Model {
 	return m
 }
 
+func (m Model) showAlert(message string) Model {
+	if content, ok := m.AlertModal.Content.(*modal.AlertContent); ok {
+		content.SetMessage(message)
+		m.AlertModal.SetContent(content)
+	} else {
+		m.AlertModal.SetContent(modal.NewAlertContent(message))
+	}
+	m.previousFocus = m.Focus
+	m.AlertModal.Show()
+	m.Focus = FocusAlertModal
+	m.Sidebar.SetFocused(false)
+	m.Tabs.SetFocused(false)
+	m = m.updateFooter()
+	return m
+}
+
 // getFooterHelp returns context-sensitive help text based on current focus
 func (m Model) getFooterHelp() string {
 	switch m.Focus {
@@ -1413,6 +1459,8 @@ func (m Model) getFooterHelp() string {
 		return "Enter: Confirm | Esc: Cancel"
 	case FocusConfirmModal:
 		return "y: Yes | n/Esc: No | h/l: Switch"
+	case FocusAlertModal:
+		return "Enter/Esc: Close"
 	case FocusHelpModal:
 		return "?: Help | ←→/Tab: Sections | j/k: Scroll | Esc/q: Close"
 	default:
@@ -1735,7 +1783,7 @@ func (m Model) loadPage(page int) Model {
 			"error": err.Error(),
 			"page":  page,
 		})
-		return m
+		return m.showAlert(fmt.Sprintf("Failed to load page %d: %s", page, err.Error()))
 	}
 
 	// Update current page
@@ -1852,7 +1900,7 @@ func (m Model) reloadTableDataWithSort() Model {
 		logger.Error("Failed to load sorted data", map[string]any{
 			"error": err.Error(),
 		})
-		return m
+		return m.showAlert("Failed to load sorted data: " + err.Error())
 	}
 
 	// Update current page
@@ -1941,26 +1989,26 @@ func (m Model) handleDeleteRow(modal *modalaction.Model) Model {
 
 	if connectionName == "" || dbName == "" {
 		logger.Error("No active connection or database", nil)
-		return m
+		return m.showAlert("No active connection or database.")
 	}
 
 	driver, exists := m.dbConnections[connectionName]
 	if !exists {
 		logger.Error("No active connection", map[string]any{"connection": connectionName})
-		return m
+		return m.showAlert("No active connection named \"" + connectionName + "\".")
 	}
 
 	structure, err := driver.GetTableStructure(dbName, tableName)
 	if err != nil {
 		logger.Error("Failed to get table structure", map[string]any{"error": err.Error()})
-		return m
+		return m.showAlert("Failed to load table structure: " + err.Error())
 	}
 
 	// Build WHERE clause using primary keys
 	whereClause, err := m.buildPrimaryKeyWhereClause(driver, structure, columnNames, rowData)
 	if err != nil {
 		logger.Error("Failed to build WHERE clause", map[string]any{"error": err.Error()})
-		return m
+		return m.showAlert("Failed to build WHERE clause: " + err.Error())
 	}
 
 	// Execute DELETE query
@@ -1971,7 +2019,7 @@ func (m Model) handleDeleteRow(modal *modalaction.Model) Model {
 	_, err = driver.ExecuteQuery(query)
 	if err != nil {
 		logger.Error("Failed to delete row", map[string]any{"error": err.Error()})
-		return m
+		return m.showAlert("Failed to delete row: " + err.Error())
 	}
 
 	logger.Info("Row deleted successfully", nil)
@@ -2003,32 +2051,32 @@ func (m Model) handleCellUpdate(modal *modalaction.Model, newValue string) Model
 
 	if connectionName == "" || dbName == "" {
 		logger.Error("No active connection or database", nil)
-		return m
+		return m.showAlert("No active connection or database.")
 	}
 
 	driver, exists := m.dbConnections[connectionName]
 	if !exists {
 		logger.Error("No active connection", map[string]any{"connection": connectionName})
-		return m
+		return m.showAlert("No active connection named \"" + connectionName + "\".")
 	}
 
 	structure, err := driver.GetTableStructure(dbName, tableName)
 	if err != nil {
 		logger.Error("Failed to get table structure", map[string]any{"error": err.Error()})
-		return m
+		return m.showAlert("Failed to load table structure: " + err.Error())
 	}
 
 	// Build WHERE clause using primary keys
 	whereClause, err := m.buildPrimaryKeyWhereClause(driver, structure, columnNames, rowData)
 	if err != nil {
 		logger.Error("Failed to build WHERE clause", map[string]any{"error": err.Error()})
-		return m
+		return m.showAlert("Failed to build WHERE clause: " + err.Error())
 	}
 
 	// Get column name
 	if selectedCol < 0 || selectedCol >= len(columnNames) {
 		logger.Error("Invalid column index", map[string]any{"selectedCol": selectedCol})
-		return m
+		return m.showAlert("Invalid column selection.")
 	}
 	columnName := columnNames[selectedCol]
 
@@ -2041,7 +2089,7 @@ func (m Model) handleCellUpdate(modal *modalaction.Model, newValue string) Model
 	_, err = driver.ExecuteQuery(query)
 	if err != nil {
 		logger.Error("Failed to update cell", map[string]any{"error": err.Error()})
-		return m
+		return m.showAlert("Failed to update cell: " + err.Error())
 	}
 
 	logger.Info("Cell updated successfully", nil)
@@ -2132,7 +2180,7 @@ func (m Model) reloadTableData() Model {
 	result, err := driver.GetTableDataPaginated(dbName, tableName, pagination)
 	if err != nil {
 		logger.Error("Failed to reload table data", map[string]any{"error": err.Error()})
-		return m
+		return m.showAlert("Failed to reload table data: " + err.Error())
 	}
 
 	// Convert data to table.Row format (skip header row)

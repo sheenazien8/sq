@@ -894,7 +894,7 @@ func (m Model) View() string {
 	if m.lastError != "" {
 		statusText = lipgloss.NewStyle().
 			Foreground(t.Colors.Error).
-			Render("Error: " + truncateText(m.lastError, m.width-20))
+			Render(truncateText(m.lastError, m.width-20))
 	}
 	statusBar := lipgloss.JoinHorizontal(lipgloss.Left,
 		modeIndicator,

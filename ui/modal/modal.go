@@ -3,6 +3,7 @@ package modal
 import (
 	"strings"
 
+	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/sheenazien8/sq/ui/theme"
@@ -284,8 +285,142 @@ func (c *ConfirmContent) Reset() {
 	c.closed = false
 }
 
+type AlertContent struct {
+	Message  string
+	selected int
+	copied   bool
+	copyErr  string
+	result   Result
+	closed   bool
+	width    int
+}
+
+func NewAlertContent(message string) *AlertContent {
+	return &AlertContent{
+		Message:  message,
+		selected: 1,
+		result:   ResultNone,
+		closed:   false,
+	}
+}
+
+func (c *AlertContent) SetMessage(message string) {
+	c.Message = message
+	c.selected = 1
+	c.copied = false
+	c.copyErr = ""
+}
+
+func (c *AlertContent) Update(msg tea.Msg) (Content, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.String() {
+		case "left", "h", "tab":
+			c.selected = 0
+		case "right", "l", "shift+tab":
+			c.selected = 1
+		case "c", "y":
+			if err := clipboard.WriteAll(c.Message); err != nil {
+				c.copyErr = err.Error()
+				c.copied = false
+			} else {
+				c.copied = true
+				c.copyErr = ""
+			}
+		case "enter":
+			if c.selected == 0 {
+				if err := clipboard.WriteAll(c.Message); err != nil {
+					c.copyErr = err.Error()
+					c.copied = false
+				} else {
+					c.copied = true
+					c.copyErr = ""
+				}
+			} else {
+				c.result = ResultSubmit
+				c.closed = true
+			}
+		case "esc", "q":
+			c.result = ResultSubmit
+			c.closed = true
+		}
+	}
+	return c, nil
+}
+
+func (c *AlertContent) View() string {
+	t := theme.Current
+
+	messageStyle := lipgloss.NewStyle().
+		Foreground(t.Colors.Error).
+		Align(lipgloss.Center).
+		Padding(1, 0)
+
+	activeButtonStyle := lipgloss.NewStyle().
+		Foreground(t.Colors.Background).
+		Background(t.Colors.Primary).
+		Padding(0, 3).
+		Bold(true)
+
+	inactiveButtonStyle := lipgloss.NewStyle().
+		Foreground(t.Colors.ForegroundDim).
+		Background(t.Colors.SelectionBg).
+		Padding(0, 3)
+
+	var copyButton, okButton string
+	if c.selected == 0 {
+		copyButton = activeButtonStyle.Render(" Copy ")
+		okButton = inactiveButtonStyle.Render(" OK ")
+	} else {
+		copyButton = inactiveButtonStyle.Render(" Copy ")
+		okButton = activeButtonStyle.Render(" OK ")
+	}
+	buttonRow := lipgloss.JoinHorizontal(lipgloss.Center, copyButton, "   ", okButton)
+	buttonRowCentered := lipgloss.NewStyle().Width(40).Align(lipgloss.Center).Render(buttonRow)
+
+	helpStyle := lipgloss.NewStyle().
+		Foreground(t.Colors.ForegroundDim).
+		Align(lipgloss.Center).
+		Padding(1, 0, 0, 0)
+	help := helpStyle.Render("Left/Right/Tab: select | Enter: action | c/y: copy | Esc: close")
+
+	var statusLine string
+	if c.copyErr != "" {
+		statusLine = lipgloss.NewStyle().Foreground(t.Colors.Error).Align(lipgloss.Center).Render("Copy failed: " + c.copyErr)
+	} else if c.copied {
+		statusLine = lipgloss.NewStyle().Foreground(t.Colors.Success).Align(lipgloss.Center).Render("Copied to clipboard.")
+	}
+
+	message := messageStyle.Render(c.Message)
+
+	return lipgloss.JoinVertical(
+		lipgloss.Center,
+		message,
+		buttonRowCentered,
+		statusLine,
+		help,
+	)
+}
+
+func (c *AlertContent) Result() Result {
+	return c.result
+}
+
+func (c *AlertContent) ShouldClose() bool {
+	return c.closed
+}
+
+func (c *AlertContent) SetWidth(width int) {
+	c.width = width
+}
+
 // NewConfirm creates a new confirmation modal (convenience function)
 func NewConfirm(title, message string) Model {
 	content := NewConfirmContent(message)
+	return New(title, content)
+}
+
+func NewAlert(title, message string) Model {
+	content := NewAlertContent(message)
 	return New(title, content)
 }

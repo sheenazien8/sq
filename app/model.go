@@ -38,6 +38,7 @@ const (
 	FocusActionModal
 	FocusEditCellModal
 	FocusConfirmModal
+	FocusAlertModal
 	FocusHelpModal
 )
 
@@ -53,9 +54,11 @@ type Model struct {
 	ActionModal           modalaction.Model
 	EditCellModal         modaleditcell.Model
 	ConfirmModal          modal.Model
+	AlertModal            modal.Model
 	HelpModal             modalhelp.Model
 	ColumnVisibilityModal modal.Model
 	Focus                 Focus
+	previousFocus         Focus
 
 	allRows     []table.Row
 	columns     []table.Column
@@ -130,6 +133,7 @@ func New() Model {
 	actionModal := modalaction.New()
 	editCellModal := modaleditcell.New()
 	confirmModal := modal.NewConfirm("Confirm Action", "Are you sure you want to perform this action?")
+	alertModal := modal.NewAlert("Error", "")
 	helpModal := modalhelp.New()
 	columnVisibilityContent := modalcolumnvisibility.New()
 	columnVisibilityModal := modal.New("Column Visibility", columnVisibilityContent)
@@ -146,9 +150,11 @@ func New() Model {
 		ActionModal:           actionModal,
 		EditCellModal:         editCellModal,
 		ConfirmModal:          confirmModal,
+		AlertModal:            alertModal,
 		HelpModal:             helpModal,
 		ColumnVisibilityModal: columnVisibilityModal,
 		Focus:                 FocusSidebar,
+		previousFocus:         FocusSidebar,
 		dbConnections:         make(map[string]drivers.Driver),
 		themeIndex:            themeIdx,
 		config:                cfg,
