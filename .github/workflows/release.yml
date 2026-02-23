@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   release:
     runs-on: ubuntu-latest
@@ -25,63 +28,14 @@ jobs:
     - name: Build binaries
       run: chmod +x ./build.sh && ./build.sh
 
-    - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
       with:
-        tag_name: ${{ github.ref }}
-        release_name: Release ${{ github.ref }}
-        draft: false
+        name: Release ${{ github.ref_name }}
         prerelease: true
-
-    - name: Upload Linux Binary
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./sq-linux-amd64
-        asset_name: sq-linux-amd64
-        asset_content_type: application/octet-stream
-
-    - name: Upload Linux ARM64 Binary
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./sq-linux-arm64
-        asset_name: sq-linux-arm64
-        asset_content_type: application/octet-stream
-
-    - name: Upload macOS Binary
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./sq-darwin-amd64
-        asset_name: sq-darwin-amd64
-        asset_content_type: application/octet-stream
-
-    - name: Upload macOS ARM64 Binary
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./sq-darwin-arm64
-        asset_name: sq-darwin-arm64
-        asset_content_type: application/octet-stream
-
-    - name: Upload Windows Binary
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./sq-windows-amd64.exe
-        asset_name: sq-windows-amd64.exe
-        asset_content_type: application/octet-stream
+        files: |
+          sq-linux-amd64
+          sq-linux-arm64
+          sq-darwin-amd64
+          sq-darwin-arm64
+          sq-windows-amd64.exe
