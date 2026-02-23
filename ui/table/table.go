@@ -397,7 +397,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 					m.allColumnsAutoFit = false
 				}
 				idx := m.visibleColumnIndices[m.cursorCol]
-				newWidth := max(m.columns[idx].Width - 2, 5)
+				newWidth := max(m.columns[idx].Width - 2, 4)
 				m.columns[idx].Width = newWidth
 			}
 		case "home":
