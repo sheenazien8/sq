@@ -20,6 +20,8 @@
     "jump_last_column": ["L"],
     "next_page": [">"],
     "prev_page": ["<"],
+    "increase_column": ["alt+right","shift+right"],
+    "decrease_column": ["alt+left","shift+left"],
     "goto_definition": ["gd"],
     "view_structure": ["d"],
     "yank": ["y"],

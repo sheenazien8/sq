@@ -381,8 +381,30 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		case key.Matches(msg, keys.AppKeys.End):
 			m.cursorRow = max(0, len(m.rows)-1)
 			m.rowOffset = m.maxRowOffset()
+		case key.Matches(msg, keys.AppKeys.IncreaseColumn):
+			if len(m.visibleColumnIndices) > 0 {
+				if m.allColumnsAutoFit {
+					for i := range m.columns {
+						m.columns[i].Width = m.getEffectiveColumnWidth(i)
+					}
+					m.allColumnsAutoFit = false
+				}
+				idx := m.visibleColumnIndices[m.cursorCol]
+				m.columns[idx].Width += 2
+			}
+		case key.Matches(msg, keys.AppKeys.DecreaseColumn):
+			if len(m.visibleColumnIndices) > 0 {
+				if m.allColumnsAutoFit {
+					for i := range m.columns {
+						m.columns[i].Width = m.getEffectiveColumnWidth(i)
+					}
+					m.allColumnsAutoFit = false
+				}
+				idx := m.visibleColumnIndices[m.cursorCol]
+				newWidth := max(m.columns[idx].Width - 2, 4)
+				m.columns[idx].Width = newWidth
+			}
 
-		// Horizontal navigation (move cursor between columns)
 		case key.Matches(msg, keys.AppKeys.Left):
 			if m.cursorCol > 0 {
 				m.cursorCol--

@@ -36,20 +36,22 @@ type KeyMap struct {
 	OpenQueryEditor   key.Binding
 	Confirm           key.Binding
 	Cancel            key.Binding
+	IncreaseColumn    key.Binding
+	DecreaseColumn    key.Binding
 
-	EditConnection   key.Binding
-	DeleteConnection key.Binding
-	Refresh          key.Binding
-	ActionMenu       key.Binding
-	ColumnVisibility key.Binding
-	CloseTab         key.Binding
-	NextTab          key.Binding
-	PrevTab          key.Binding
-	ExecuteQuery     key.Binding
-	SwitchEditorResultsPane       key.Binding
-	FormatQuery      key.Binding
-	QueryHistory     key.Binding
-	YankQuery        key.Binding
+	EditConnection          key.Binding
+	DeleteConnection        key.Binding
+	Refresh                 key.Binding
+	ActionMenu              key.Binding
+	ColumnVisibility        key.Binding
+	CloseTab                key.Binding
+	NextTab                 key.Binding
+	PrevTab                 key.Binding
+	ExecuteQuery            key.Binding
+	SwitchEditorResultsPane key.Binding
+	FormatQuery             key.Binding
+	QueryHistory            key.Binding
+	YankQuery               key.Binding
 }
 
 // AppKeys is the global instance of key bindings
@@ -133,6 +135,14 @@ func DefaultKeyMap() KeyMap {
 		PrevPage: key.NewBinding(
 			key.WithKeys("<"),
 			key.WithHelp("<", "prev page"),
+		),
+		IncreaseColumn: key.NewBinding(
+			key.WithKeys("alt+right", "shift+right"),
+			key.WithHelp("alt+right/shift+right", "increase column"),
+		),
+		DecreaseColumn: key.NewBinding(
+			key.WithKeys("alt+left", "shift+left"),
+			key.WithHelp("alt+left/shift+left", "decrease column"),
 		),
 		GotoDefinition: key.NewBinding(
 			key.WithKeys("gd"),
@@ -265,6 +275,8 @@ func UpdateFromConfig(configMap map[string][]string) {
 	apply("prev_page", &AppKeys.PrevPage)
 	apply("goto_definition", &AppKeys.GotoDefinition)
 	apply("view_structure", &AppKeys.ViewStructure)
+	apply("increase_column", &AppKeys.IncreaseColumn)
+	apply("decrease_column", &AppKeys.DecreaseColumn)
 	apply("yank", &AppKeys.Yank)
 	apply("preview", &AppKeys.Preview)
 	apply("filter", &AppKeys.Filter)
