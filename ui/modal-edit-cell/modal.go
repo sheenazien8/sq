@@ -3,9 +3,11 @@ package modaleditcell
 import (
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sheenazien8/sq/keys"
 	"github.com/sheenazien8/sq/ui/modal"
 	"github.com/sheenazien8/sq/ui/theme"
 )
@@ -121,13 +123,13 @@ func (e *EditCellContent) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "enter":
+		switch {
+		case key.Matches(msg, keys.AppKeys.Confirm):
 			// Confirm the edit
 			e.result = modal.ResultSubmit
 			e.closed = true
 			return e, nil
-		case "esc":
+		case key.Matches(msg, keys.AppKeys.Cancel):
 			// Cancel the edit
 			e.result = modal.ResultCancel
 			e.closed = true

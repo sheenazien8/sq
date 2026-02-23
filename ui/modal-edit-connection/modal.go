@@ -3,10 +3,12 @@ package modaleditconnection
 import (
 	"strconv"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/sheenazien8/sq/drivers"
+	"github.com/sheenazien8/sq/keys"
 	"github.com/sheenazien8/sq/logger"
 	"github.com/sheenazien8/sq/ui/modal"
 	"github.com/sheenazien8/sq/ui/theme"
@@ -180,20 +182,20 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 	case tea.KeyMsg:
 		// Handle text input fields
 		if c.focusField >= FocusNameInput && c.focusField <= FocusDatabaseInput {
-			switch msg.String() {
-			case "esc":
+			switch {
+			case key.Matches(msg, keys.AppKeys.Cancel):
 				logger.Debug("Edit connection cancelled", nil)
 				c.result = modal.ResultCancel
 				c.closed = true
 				return c, nil
-			case "tab", "down":
+			case key.Matches(msg, keys.AppKeys.FocusNext), key.Matches(msg, keys.AppKeys.Down):
 				c.focusField = (c.focusField + 1)
 				if c.focusField > FocusDatabaseInput {
 					c.focusField = FocusSubmitButton
 				}
 				c.updateFocus()
 				return c, nil
-			case "shift+tab", "up":
+			case msg.String() == "shift+tab", key.Matches(msg, keys.AppKeys.Up):
 				if c.focusField == FocusNameInput {
 					c.focusField = FocusNameInput
 				} else {
@@ -207,20 +209,20 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 			}
 		}
 
-		switch msg.String() {
-		case "esc":
+		switch {
+		case key.Matches(msg, keys.AppKeys.Cancel):
 			logger.Debug("Edit connection cancelled", nil)
 			c.result = modal.ResultCancel
 			c.closed = true
 			return c, nil
 
-		case "tab", "down", "j":
+		case key.Matches(msg, keys.AppKeys.FocusNext), key.Matches(msg, keys.AppKeys.Down):
 			if c.focusField < FocusCancelButton {
 				c.focusField = (c.focusField + 1) % (FocusCancelButton + 1)
 			}
 			c.updateFocus()
 
-		case "shift+tab", "up", "k":
+		case msg.String() == "shift+tab", key.Matches(msg, keys.AppKeys.Up):
 			if c.focusField > FocusNameInput {
 				c.focusField = (c.focusField - 1)
 			} else {
@@ -228,21 +230,21 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 			}
 			c.updateFocus()
 
-		case "left", "h":
+		case key.Matches(msg, keys.AppKeys.Left):
 			if c.focusField == FocusSubmitButton {
 				c.focusField = FocusCancelButton
 			} else if c.focusField == FocusCancelButton {
 				c.focusField = FocusSubmitButton
 			}
 
-		case "right", "l":
+		case key.Matches(msg, keys.AppKeys.Right):
 			if c.focusField == FocusSubmitButton {
 				c.focusField = FocusCancelButton
 			} else if c.focusField == FocusCancelButton {
 				c.focusField = FocusSubmitButton
 			}
 
-		case "enter":
+		case key.Matches(msg, keys.AppKeys.Confirm):
 			if c.focusField == FocusSubmitButton {
 				if errMsg := c.validate(); errMsg != "" {
 					c.errorMsg = errMsg

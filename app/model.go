@@ -3,6 +3,7 @@ package app
 import (
 	"github.com/sheenazien8/sq/config"
 	"github.com/sheenazien8/sq/drivers"
+	"github.com/sheenazien8/sq/keys"
 	"github.com/sheenazien8/sq/ui/modal"
 	"github.com/sheenazien8/sq/ui/modal-action"
 	"github.com/sheenazien8/sq/ui/modal-cell-preview"
@@ -117,6 +118,7 @@ func New() Model {
 	s.SetFocused(true)
 
 	cfg, _ := config.Load()
+	keys.UpdateFromConfig(cfg.Keybindings)
 
 	theme.SetTheme(theme.GetThemeByName(cfg.Theme))
 

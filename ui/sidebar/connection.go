@@ -3,9 +3,11 @@ package sidebar
 import (
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sheenazien8/sq/keys"
 	"github.com/sheenazien8/sq/logger"
 	"github.com/sheenazien8/sq/storage"
 	"github.com/sheenazien8/sq/ui/theme"
@@ -426,8 +428,8 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "up", "k":
+		switch {
+		case key.Matches(msg, keys.AppKeys.Up):
 			if m.cursor > 0 {
 				m.cursor--
 				if m.cursor < m.offset {
@@ -435,7 +437,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				}
 				m.updateSelectedConnectionForCursor()
 			}
-		case "down", "j":
+		case key.Matches(msg, keys.AppKeys.Down):
 			if m.cursor < len(treeItems)-1 {
 				m.cursor++
 				if m.cursor >= m.offset+m.visibleItems() {
@@ -443,16 +445,16 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				}
 				m.updateSelectedConnectionForCursor()
 			}
-		case "home":
+		case key.Matches(msg, keys.AppKeys.Home):
 			m.cursor = 0
 			m.offset = 0
 			m.updateSelectedConnectionForCursor()
-		case "end":
+		case key.Matches(msg, keys.AppKeys.End):
 			m.cursor = max(0, len(treeItems)-1)
 			maxOffset := max(0, len(treeItems)-m.visibleItems())
 			m.offset = maxOffset
 			m.updateSelectedConnectionForCursor()
-		case "enter":
+		case key.Matches(msg, keys.AppKeys.Confirm):
 			if m.cursor >= 0 && m.cursor < len(treeItems) {
 				item := treeItems[m.cursor]
 				if item.Level == 0 {

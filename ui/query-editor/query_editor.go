@@ -3,10 +3,12 @@ package queryeditor
 import (
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/cockroachdb/cockroachdb-parser/pkg/sql/sem/tree"
 	"github.com/mjibson/sqlfmt"
+	"github.com/sheenazien8/sq/keys"
 	"github.com/sheenazien8/sq/logger"
 	syntaxeditor "github.com/sheenazien8/sq/ui/syntax-editor"
 	"github.com/sheenazien8/sq/ui/table"
@@ -253,8 +255,8 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		})
 
 		// Global shortcuts that work in any mode
-		switch keyStr {
-		case "f5", "ctrl+e":
+		switch {
+		case key.Matches(msg, keys.AppKeys.ExecuteQuery):
 			// Execute the query
 			query := m.GetQuery()
 			logger.Debug("Execute query triggered", map[string]any{
@@ -272,7 +274,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				}
 			}
 			return m, nil
-		case "ctrl+r":
+		case key.Matches(msg, keys.AppKeys.SwitchPane):
 			// Toggle between editor and results focus
 			if m.showResults {
 				if m.resultTable.Focused() {
@@ -287,11 +289,11 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				}
 			}
 			return m, nil
-		case "ctrl+f":
+		case key.Matches(msg, keys.AppKeys.FormatQuery):
 			// Format SQL
 			m.formatSQL()
 			return m, nil
-		case "H":
+		case key.Matches(msg, keys.AppKeys.QueryHistory):
 			// Open query history for this connection/database
 			return m, func() tea.Msg {
 				return QueryHistoryRequestMsg{
@@ -299,7 +301,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 					DatabaseName:   m.databaseName,
 				}
 			}
-		case "ctrl+y":
+		case key.Matches(msg, keys.AppKeys.YankQuery):
 			// Copy entire query to system clipboard
 			query := m.GetQuery()
 			if query != "" {

@@ -3,8 +3,10 @@ package table
 import (
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sheenazien8/sq/keys"
 	"github.com/sheenazien8/sq/ui/theme"
 )
 
@@ -341,47 +343,47 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
+		switch {
 		// Vertical navigation
-		case "up", "k":
+		case key.Matches(msg, keys.AppKeys.Up):
 			if m.cursorRow > 0 {
 				m.cursorRow--
 				if m.cursorRow < m.rowOffset {
 					m.rowOffset = m.cursorRow
 				}
 			}
-		case "down", "j":
+		case key.Matches(msg, keys.AppKeys.Down):
 			if m.cursorRow < len(m.rows)-1 {
 				m.cursorRow++
 				if m.cursorRow >= m.rowOffset+m.visibleRows() {
 					m.rowOffset = m.cursorRow - m.visibleRows() + 1
 				}
 			}
-		case "pgup", "K":
+		case key.Matches(msg, keys.AppKeys.PageUp), key.Matches(msg, keys.AppKeys.PrevPage):
 			m.cursorRow = max(0, m.cursorRow-m.visibleRows())
 			m.rowOffset = max(0, m.rowOffset-m.visibleRows())
-		case "pgdown", "J":
+		case key.Matches(msg, keys.AppKeys.PageDown), key.Matches(msg, keys.AppKeys.NextPage):
 			m.cursorRow = min(len(m.rows)-1, m.cursorRow+m.visibleRows())
 			m.rowOffset = min(m.maxRowOffset(), m.rowOffset+m.visibleRows())
-		case ">":
+		case key.Matches(msg, keys.AppKeys.NextPage):
 			// Next page of query results
 			if m.HasNextPage() {
 				return m, func() tea.Msg { return NextPageMsg{} }
 			}
-		case "<":
+		case key.Matches(msg, keys.AppKeys.PrevPage):
 			// Previous page of query results
 			if m.HasPrevPage() {
 				return m, func() tea.Msg { return PrevPageMsg{} }
 			}
-		case "home":
+		case key.Matches(msg, keys.AppKeys.Home):
 			m.cursorRow = 0
 			m.rowOffset = 0
-		case "end":
+		case key.Matches(msg, keys.AppKeys.End):
 			m.cursorRow = max(0, len(m.rows)-1)
 			m.rowOffset = m.maxRowOffset()
 
 		// Horizontal navigation (move cursor between columns)
-		case "left", "h":
+		case key.Matches(msg, keys.AppKeys.Left):
 			if m.cursorCol > 0 {
 				m.cursorCol--
 				// Adjust column offset if cursor goes off screen
@@ -389,7 +391,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 					m.colOffset = m.cursorCol
 				}
 			}
-		case "right", "l":
+		case key.Matches(msg, keys.AppKeys.Right):
 			if m.cursorCol < len(m.visibleColumnIndices)-1 {
 				m.cursorCol++
 				// Adjust column offset if cursor goes off screen
@@ -398,10 +400,10 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 					m.colOffset = m.cursorCol - visibleCols + 1
 				}
 			}
-		case "H":
+		case key.Matches(msg, keys.AppKeys.JumpToFirstColumn):
 			m.cursorCol = 0
 			m.colOffset = 0
-		case "L":
+		case key.Matches(msg, keys.AppKeys.JumpToLastColumn):
 			m.cursorCol = len(m.visibleColumnIndices) - 1
 			// Adjust column offset to show the last columns
 			visibleCols := m.visibleCols()
@@ -410,7 +412,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			} else {
 				m.colOffset = 0
 			}
-		case " ":
+		case msg.String() == " ":
 			// Sort by current column
 			return m, func() tea.Msg {
 				return SortMsg{ColumnIdx: m.cursorCol}
