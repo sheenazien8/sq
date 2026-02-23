@@ -24,11 +24,20 @@ import (
 type TableColumn = table.Column
 type TableRow = table.Row
 
+// Page represents which page the application is currently on
+type Page int
+
+const (
+	PageConnectionManager Page = iota
+	PageDatabaseOperations
+)
+
 // Focus represents which panel is currently focused
 type Focus int
 
 const (
-	FocusSidebar Focus = iota
+	FocusConnectionManager Focus = iota
+	FocusSidebar
 	FocusMain
 	FocusSidebarFilter
 	FocusExitModal
@@ -46,6 +55,7 @@ const (
 )
 
 type Model struct {
+	CurrentPage           Page
 	Sidebar               sidebar.Model
 	Main                  table.Model
 	Tabs                  tab.Model
@@ -110,6 +120,10 @@ type Model struct {
 	themeIndex int
 
 	config *config.Config
+
+	// Connection Manager state
+	connectionManagerCursor int
+	connectionManagerOffset int
 }
 
 func New() Model {
@@ -145,6 +159,7 @@ func New() Model {
 	tabs := tab.New()
 
 	return Model{
+		CurrentPage:           PageConnectionManager,
 		Sidebar:               s,
 		Tabs:                  tabs,
 		ExitModal:             exitModal,

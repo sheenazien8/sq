@@ -23,11 +23,18 @@ import (
 	"github.com/sheenazien8/sq/ui/theme"
 )
 
+type NavigateToPageMsg struct {
+	Page Page
+}
+
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
+	case NavigateToPageMsg:
+		m.CurrentPage = msg.Page
+		return m, nil
 
 	case sidebar.ConnectionSelectedMsg:
 		logger.Debug("Connection selected", map[string]any{
@@ -485,8 +492,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					// Refresh sidebar connections list after successful creation
 					m.Sidebar.RefreshConnections()
 				}
-				m.Focus = FocusSidebar
-				m.Sidebar.SetFocused(true)
+
+				if m.CurrentPage == PageConnectionManager {
+					m.Focus = FocusConnectionManager
+				} else {
+					m.Focus = FocusSidebar
+					m.Sidebar.SetFocused(true)
+				}
 				m = m.updateFooter()
 			}
 			return m, tea.Batch(cmds...)
@@ -538,8 +550,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.Sidebar.RefreshConnections()
 					}
 				}
-				m.Focus = FocusSidebar
-				m.Sidebar.SetFocused(true)
+
+				if m.CurrentPage == PageConnectionManager {
+					m.Focus = FocusConnectionManager
+				} else {
+					m.Focus = FocusSidebar
+					m.Sidebar.SetFocused(true)
+				}
 				m = m.updateFooter()
 			}
 			return m, tea.Batch(cmds...)
@@ -574,10 +591,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							// If the tab is from the deleted connection, we could close it
 							// For now, we'll leave tabs open - user can close them manually
 						}
+
+						// Update cursor position if we deleted the last item
+						connections, _ := storage.GetAllConnections()
+						if m.CurrentPage == PageConnectionManager && m.connectionManagerCursor >= len(connections) {
+							if len(connections) > 0 {
+								m.connectionManagerCursor = len(connections) - 1
+							} else {
+								m.connectionManagerCursor = 0
+							}
+						}
 					}
 				}
-				m.Focus = FocusSidebar
-				m.Sidebar.SetFocused(true)
+
+				if m.CurrentPage == PageConnectionManager {
+					m.Focus = FocusConnectionManager
+				} else {
+					m.Focus = FocusSidebar
+					m.Sidebar.SetFocused(true)
+				}
 				m = m.updateFooter()
 			}
 			return m, tea.Batch(cmds...)
@@ -864,43 +896,47 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 
 		case "ctrl+c", "q":
-			if m.Focus == FocusSidebar || m.Focus == FocusMain {
+			if m.CurrentPage == PageConnectionManager {
+				m.ExitModal.Show()
+				m.Focus = FocusExitModal
+				m = m.updateFooter()
+			} else if m.Focus == FocusSidebar || m.Focus == FocusMain {
 				m.ExitModal.Show()
 				m.Focus = FocusExitModal
 				m = m.updateFooter()
 			}
 
-		case "/", "f":
-			if m.Focus == FocusMain && m.Tabs.HasTabs() && m.Tabs.GetActiveTabType() == tab.TabTypeTable {
-				// Focus the filter in the active table tab
-				m.Tabs.FocusFilter()
-				m = m.updateFooter()
-			} else if m.Focus == FocusSidebar {
-				// Toggle sidebar filter
-				if !m.Sidebar.IsFilterVisible() {
-					// Show filter input
-					m.Sidebar.SetFilterVisible(true)
-					m.Focus = FocusSidebarFilter
-				} else {
-					// Hide filter input but keep filter active
-					m.Sidebar.HideFilterInput()
-					m.Focus = FocusSidebar
-				}
-				m = m.updateFooter()
-			} else {
-				m.Sidebar, cmd = m.Sidebar.Update(msg)
-				cmds = append(cmds, cmd)
+		case "j", "down":
+			if m.CurrentPage == PageConnectionManager {
+				return m.updateConnectionManager(msg), nil
+			}
+
+		case "k", "up":
+			if m.CurrentPage == PageConnectionManager {
+				return m.updateConnectionManager(msg), nil
+			}
+
+		case "enter":
+			if m.CurrentPage == PageConnectionManager {
+				return m.updateConnectionManager(msg), nil
 			}
 
 		case "n":
-			if m.Focus == FocusSidebar {
+			if m.CurrentPage == PageConnectionManager {
+				m.CreateConnectionModal.Show()
+				m.Focus = FocusCreateConnectionModal
+				m = m.updateFooter()
+				return m, nil
+			} else if m.Focus == FocusSidebar {
 				m.CreateConnectionModal.Show()
 				m.Focus = FocusCreateConnectionModal
 				m = m.updateFooter()
 			}
 
-		case "w", "W": // Edit connection
-			if m.Focus == FocusSidebar {
+		case "w", "W":
+			if m.CurrentPage == PageConnectionManager {
+				return m.updateConnectionManager(msg), nil
+			} else if m.Focus == FocusSidebar {
 				selectedItem := m.Sidebar.SelectedItem()
 				// Can only edit connections (level 0), not tables (level 1)
 				if selectedItem != nil && selectedItem.Level == 0 {
@@ -940,7 +976,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "x", "X": // Delete connection
-			if m.Focus == FocusSidebar {
+			if m.CurrentPage == PageConnectionManager {
+				return m.updateConnectionManager(msg), nil
+			} else if m.Focus == FocusSidebar {
 				selectedItem := m.Sidebar.SelectedItem()
 				// Can only delete connections (level 0), not tables (level 1)
 				if selectedItem != nil && selectedItem.Level == 0 {
@@ -953,6 +991,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m = m.updateFooter()
 					}
 				}
+			}
+
+		case "/", "f":
+			if m.Focus == FocusMain && m.Tabs.HasTabs() && m.Tabs.GetActiveTabType() == tab.TabTypeTable {
+				// Focus the filter in the active table tab
+				m.Tabs.FocusFilter()
+				m = m.updateFooter()
+			} else if m.Focus == FocusSidebar {
+				// Toggle sidebar filter
+				if !m.Sidebar.IsFilterVisible() {
+					// Show filter input
+					m.Sidebar.SetFilterVisible(true)
+					m.Focus = FocusSidebarFilter
+				} else {
+					// Hide filter input but keep filter active
+					m.Sidebar.HideFilterInput()
+					m.Focus = FocusSidebar
+				}
+				m = m.updateFooter()
+			} else {
+				m.Sidebar, cmd = m.Sidebar.Update(msg)
+				cmds = append(cmds, cmd)
 			}
 
 		case "tab":
@@ -1194,6 +1254,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.ContentWidth = contentWidth
 			m.Tabs.SetSize(contentWidth-4, m.ContentHeight)
 			m = m.updateFooter()
+
+		case "b":
+			if m.CurrentPage == PageDatabaseOperations {
+				return m, func() tea.Msg {
+					return NavigateToPageMsg{Page: PageConnectionManager}
+				}
+			}
 
 		default:
 			// Reset gPressed flag for any key that doesn't continue the sequence
@@ -2373,4 +2440,89 @@ func parseConnectionURL(url, driver string) (host, port, username, password, dat
 	}
 
 	return
+}
+
+func (m Model) updateConnectionManager(msg tea.KeyMsg) Model {
+	connections, err := storage.GetAllConnections()
+	if err != nil || len(connections) == 0 {
+		return m
+	}
+
+	visibleHeight := m.TerminalHeight - lipgloss.Height(m.HeaderStyle) - lipgloss.Height(m.FooterStyle) - 8
+
+	switch msg.String() {
+	case "j", "down":
+		if m.connectionManagerCursor < len(connections)-1 {
+			m.connectionManagerCursor++
+			if m.connectionManagerCursor >= m.connectionManagerOffset+visibleHeight {
+				m.connectionManagerOffset++
+			}
+		}
+
+	case "k", "up":
+		if m.connectionManagerCursor > 0 {
+			m.connectionManagerCursor--
+			if m.connectionManagerCursor < m.connectionManagerOffset {
+				m.connectionManagerOffset--
+			}
+		}
+
+	case "enter":
+		if m.connectionManagerCursor >= 0 && m.connectionManagerCursor < len(connections) {
+			selectedConn := connections[m.connectionManagerCursor]
+
+			err := m.connectToDatabase(selectedConn.Name, selectedConn.Driver, selectedConn.URL)
+			if err != nil {
+				logger.Error("Failed to connect to database", map[string]any{
+					"connection": selectedConn.Name,
+					"error":      err.Error(),
+				})
+				m = m.showAlert("Failed to connect to \"" + selectedConn.Name + "\": " + err.Error())
+				return m
+			}
+
+			m.CurrentPage = PageDatabaseOperations
+			m.Focus = FocusSidebar
+			m.Sidebar.SetFocused(true)
+			m = m.updateFooter()
+
+			logger.Info("Successfully connected and navigated to Database Operations", map[string]any{
+				"connection": selectedConn.Name,
+			})
+
+			return m
+		}
+
+	case "w", "W":
+		if m.connectionManagerCursor >= 0 && m.connectionManagerCursor < len(connections) {
+			selectedConn := connections[m.connectionManagerCursor]
+
+			host, port, username, password, database := parseConnectionURL(selectedConn.URL, selectedConn.Driver)
+
+			m.EditConnectionModal.Show(
+				selectedConn.ID,
+				selectedConn.Driver,
+				selectedConn.Name,
+				host,
+				port,
+				username,
+				password,
+				database,
+				"",
+			)
+			m.Focus = FocusEditConnectionModal
+			m = m.updateFooter()
+		}
+
+	case "x", "X":
+		if m.connectionManagerCursor >= 0 && m.connectionManagerCursor < len(connections) {
+			selectedConn := connections[m.connectionManagerCursor]
+
+			m.DeleteConnectionModal.Show(selectedConn.ID, selectedConn.Name)
+			m.Focus = FocusDeleteConnectionModal
+			m = m.updateFooter()
+		}
+	}
+
+	return m
 }

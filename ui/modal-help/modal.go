@@ -49,6 +49,13 @@ func NewHelpContent() *HelpContent {
 				},
 			},
 			{
+				Title: "Page Navigation",
+				Keymaps: []Keymap{
+					{"Enter", "Proceed/Select (Connection Manager)"},
+					{"b", "Back to connection manager (Database Operations)"},
+				},
+			},
+			{
 				Title: "Sidebar",
 				Keymaps: []Keymap{
 					{"j / ↓", "Move down"},
