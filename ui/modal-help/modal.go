@@ -130,7 +130,7 @@ func NewHelpContent() *HelpContent {
 					{keys.AppKeys.ExecuteQuery.Help().Key, keys.AppKeys.ExecuteQuery.Help().Desc},
 					{keys.AppKeys.FormatQuery.Help().Key, keys.AppKeys.FormatQuery.Help().Desc},
 					{keys.AppKeys.YankQuery.Help().Key, keys.AppKeys.YankQuery.Help().Desc},
-					{keys.AppKeys.SwitchPane.Help().Key, keys.AppKeys.SwitchPane.Help().Desc},
+					{keys.AppKeys.SwitchEditorResultsPane.Help().Key, keys.AppKeys.SwitchEditorResultsPane.Help().Desc},
 				},
 			},
 			{

@@ -274,7 +274,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				}
 			}
 			return m, nil
-		case key.Matches(msg, keys.AppKeys.SwitchPane):
+		case key.Matches(msg, keys.AppKeys.SwitchEditorResultsPane):
 			// Toggle between editor and results focus
 			if m.showResults {
 				if m.resultTable.Focused() {

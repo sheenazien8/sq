@@ -46,7 +46,7 @@ type KeyMap struct {
 	NextTab          key.Binding
 	PrevTab          key.Binding
 	ExecuteQuery     key.Binding
-	SwitchPane       key.Binding
+	SwitchEditorResultsPane       key.Binding
 	FormatQuery      key.Binding
 	QueryHistory     key.Binding
 	YankQuery        key.Binding
@@ -207,7 +207,7 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("f5", "ctrl+e"),
 			key.WithHelp("f5/ctrl+e", "execute query"),
 		),
-		SwitchPane: key.NewBinding(
+		SwitchEditorResultsPane: key.NewBinding(
 			key.WithKeys("ctrl+r"),
 			key.WithHelp("ctrl+r", "switch pane"),
 		),
@@ -282,7 +282,7 @@ func UpdateFromConfig(configMap map[string][]string) {
 	apply("next_tab", &AppKeys.NextTab)
 	apply("prev_tab", &AppKeys.PrevTab)
 	apply("execute_query", &AppKeys.ExecuteQuery)
-	apply("switch_pane", &AppKeys.SwitchPane)
+	apply("switch_editor_results_pane", &AppKeys.SwitchEditorResultsPane)
 	apply("format_query", &AppKeys.FormatQuery)
 	apply("query_history", &AppKeys.QueryHistory)
 	apply("yank_query", &AppKeys.YankQuery)

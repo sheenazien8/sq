@@ -1561,7 +1561,7 @@ func (m Model) getFooterHelp() string {
 				return fmt.Sprintf("%s: Help | %s: Execute | %s: Results | %s/%s: Tabs | %s: Close | %s: Quit",
 					keys.AppKeys.Help.Help().Key,
 					keys.AppKeys.ExecuteQuery.Help().Key,
-					keys.AppKeys.SwitchPane.Help().Key,
+					keys.AppKeys.SwitchEditorResultsPane.Help().Key,
 					keys.AppKeys.PrevTab.Help().Key, keys.AppKeys.NextTab.Help().Key,
 					keys.AppKeys.CloseTab.Help().Key,
 					keys.AppKeys.Quit.Help().Key)

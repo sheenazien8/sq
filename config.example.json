@@ -38,7 +38,7 @@
     "next_tab": ["]"],
     "prev_tab": ["["],
     "execute_query": ["f5", "ctrl+e"],
-    "switch_pane": ["ctrl+r"],
+    "switch_editor_results_pane": ["ctrl+r"],
     "format_query": ["ctrl+f"],
     "query_history": ["H"],
     "yank_query": ["ctrl+y"]
