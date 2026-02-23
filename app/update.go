@@ -3,6 +3,7 @@ package app
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
@@ -79,6 +80,36 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				logger.Info("Query copied to clipboard", map[string]any{"length": len(msg.Content)})
 			}
 		}
+		return m, nil
+
+	case queryeditor.QueryHistoryRequestMsg:
+		// Show query history modal for the requesting connection
+		connName := msg.ConnectionName
+		// Ensure modal exists in model
+		m.QueryHistoryModal.Show()
+		_ = m.QueryHistoryModal.ShowFor(connName)
+		m.previousFocus = m.Focus
+		m.Focus = FocusQueryHistoryModal
+		m = m.updateFooter()
+		return m, nil
+
+	case queryeditor.QueryLoadFromHistoryMsg:
+		// Load selected query into active query editor
+		// Properly update the active query editor model stored in the tab
+		if m.Tabs.HasTabs() && m.Tabs.GetActiveTabType() == tab.TabTypeQuery {
+			activeTab := m.Tabs.ActiveTab()
+			if activeTab != nil {
+				if qeModel, ok := activeTab.Content.(queryeditor.Model); ok {
+					qeModel.SetQuery(msg.Query)
+					m.Tabs.UpdateActiveTabContent(qeModel)
+				}
+			}
+		}
+		// Restore focus to query editor
+		m.Focus = FocusMain
+		m.Sidebar.SetFocused(false)
+		m.Tabs.SetFocused(true)
+		m = m.updateFooter()
 		return m, nil
 
 	case modalcolumnvisibility.ColumnVisibilityToggleMsg:
@@ -162,12 +193,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Execute the query
+		start := time.Now()
 		data, err := driver.ExecuteQuery(msg.Query)
+		duration := time.Since(start).Milliseconds()
 		if err != nil {
 			logger.Error("Query execution failed", map[string]any{
 				"error": err.Error(),
 			})
 			m.Tabs.SetQueryError("Query failed: " + err.Error())
+			// Persist history with error unless it's a duplicate of the most recent entry
+			conns, _ := storage.GetAllConnections()
+			var connID int64
+			for _, c := range conns {
+				if c.Name == msg.ConnectionName {
+					connID = c.ID
+					break
+				}
+			}
+			if connID != 0 {
+				// Check last entry for this connection
+				last, _ := storage.GetQueryHistory(connID, 1)
+				if len(last) == 0 || strings.TrimSpace(last[0].Query) != strings.TrimSpace(msg.Query) {
+					_, _ = storage.AddQueryHistory(connID, msg.Query, duration, 0, err.Error())
+				}
+			}
 			return m, nil
 		}
 
@@ -194,6 +243,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			})
 		} else {
 			m.Tabs.SetQueryResults([]table.Column{}, []table.Row{})
+		}
+
+		// Persist successful query to history (rowsAffected = len(rows)), avoid saving duplicate consecutive queries
+		rowsAffected := int64(0)
+		if len(data) > 1 {
+			rowsAffected = int64(len(data) - 1)
+		}
+		conns, _ := storage.GetAllConnections()
+		var connID int64
+		for _, c := range conns {
+			if c.Name == msg.ConnectionName {
+				connID = c.ID
+				break
+			}
+		}
+		if connID != 0 {
+			last, _ := storage.GetQueryHistory(connID, 1)
+			if len(last) == 0 || strings.TrimSpace(last[0].Query) != strings.TrimSpace(msg.Query) {
+				_, _ = storage.AddQueryHistory(connID, msg.Query, duration, rowsAffected, "")
+			}
 		}
 
 		return m, nil
@@ -322,6 +391,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.AlertModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 		m.HelpModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 		m.ColumnVisibilityModal.SetSize(m.TerminalWidth, m.TerminalHeight)
+		m.QueryHistoryModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 
 	case tea.KeyMsg:
 		if m.AlertModal.Visible() {
@@ -642,6 +712,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else {
 					m.Focus = FocusSidebar
 					m.Sidebar.SetFocused(true)
+				}
+				m = m.updateFooter()
+			}
+			return m, tea.Batch(cmds...)
+		}
+
+		if m.QueryHistoryModal.Visible() {
+			m.QueryHistoryModal, cmd = m.QueryHistoryModal.Update(msg)
+			cmds = append(cmds, cmd)
+
+			// Check if modal was closed
+			if !m.QueryHistoryModal.Visible() {
+				// Restore previous focus
+				m.Focus = m.previousFocus
+				switch m.Focus {
+				case FocusSidebar:
+					m.Sidebar.SetFocused(true)
+					m.Tabs.SetFocused(false)
+				case FocusMain:
+					m.Sidebar.SetFocused(false)
+					m.Tabs.SetFocused(true)
+				default:
+					m.Sidebar.SetFocused(false)
+					m.Tabs.SetFocused(false)
 				}
 				m = m.updateFooter()
 			}

@@ -29,6 +29,17 @@ type QueryExecuteMsg struct {
 	DatabaseName   string
 }
 
+// QueryHistoryRequestMsg is sent when the user requests to open the query history
+type QueryHistoryRequestMsg struct {
+	ConnectionName string
+	DatabaseName   string
+}
+
+// QueryLoadFromHistoryMsg is sent when the user selects a history item to load into the editor
+type QueryLoadFromHistoryMsg struct {
+	Query string
+}
+
 // QueryResultMsg is sent when a query has been executed
 type QueryResultMsg struct {
 	Columns []table.Column
@@ -280,6 +291,14 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			// Format SQL
 			m.formatSQL()
 			return m, nil
+		case "H":
+			// Open query history for this connection/database
+			return m, func() tea.Msg {
+				return QueryHistoryRequestMsg{
+					ConnectionName: m.connectionName,
+					DatabaseName:   m.databaseName,
+				}
+			}
 		case "ctrl+y":
 			// Copy entire query to system clipboard
 			query := m.GetQuery()
