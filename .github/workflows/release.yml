@@ -11,6 +11,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
     - name: Set up Go
       uses: actions/setup-go@v4
@@ -20,14 +22,8 @@ jobs:
     - name: Download dependencies
       run: go mod download
 
-    - name: Build Linux
-      run: GOOS=linux GOARCH=amd64 go build -o sq-linux-amd64
-
-    - name: Build macOS
-      run: GOOS=darwin GOARCH=amd64 go build -o sq-darwin-amd64
-
-    - name: Build Windows
-      run: GOOS=windows GOARCH=amd64 go build -o sq-windows-amd64.exe
+    - name: Build binaries
+      run: chmod +x ./build.sh && ./build.sh
 
     - name: Create Release
       id: create_release
@@ -50,6 +46,16 @@ jobs:
         asset_name: sq-linux-amd64
         asset_content_type: application/octet-stream
 
+    - name: Upload Linux ARM64 Binary
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./sq-linux-arm64
+        asset_name: sq-linux-arm64
+        asset_content_type: application/octet-stream
+
     - name: Upload macOS Binary
       uses: actions/upload-release-asset@v1
       env:
@@ -58,6 +64,16 @@ jobs:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ./sq-darwin-amd64
         asset_name: sq-darwin-amd64
+        asset_content_type: application/octet-stream
+
+    - name: Upload macOS ARM64 Binary
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./sq-darwin-arm64
+        asset_name: sq-darwin-arm64
         asset_content_type: application/octet-stream
 
     - name: Upload Windows Binary
