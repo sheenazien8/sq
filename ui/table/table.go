@@ -373,6 +373,33 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 			if m.HasPrevPage() {
 				return m, func() tea.Msg { return PrevPageMsg{} }
 			}
+		case "alt+right":
+			// Increase column width
+			if len(m.visibleColumnIndices) > 0 {
+				if m.allColumnsAutoFit {
+					// Persist calculated widths before disabling auto-fit
+					for i := range m.columns {
+						m.columns[i].Width = m.getEffectiveColumnWidth(i)
+					}
+					m.allColumnsAutoFit = false
+				}
+				idx := m.visibleColumnIndices[m.cursorCol]
+				m.columns[idx].Width += 2
+			}
+		case "alt+left":
+			// Decrease column width
+			if len(m.visibleColumnIndices) > 0 {
+				if m.allColumnsAutoFit {
+					// Persist calculated widths before disabling auto-fit
+					for i := range m.columns {
+						m.columns[i].Width = m.getEffectiveColumnWidth(i)
+					}
+					m.allColumnsAutoFit = false
+				}
+				idx := m.visibleColumnIndices[m.cursorCol]
+				newWidth := max(m.columns[idx].Width - 2, 5)
+				m.columns[idx].Width = newWidth
+			}
 		case "home":
 			m.cursorRow = 0
 			m.rowOffset = 0
