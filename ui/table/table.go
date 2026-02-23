@@ -359,10 +359,10 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 					m.rowOffset = m.cursorRow - m.visibleRows() + 1
 				}
 			}
-		case key.Matches(msg, keys.AppKeys.PageUp), key.Matches(msg, keys.AppKeys.PrevPage):
+		case key.Matches(msg, keys.AppKeys.PageUp):
 			m.cursorRow = max(0, m.cursorRow-m.visibleRows())
 			m.rowOffset = max(0, m.rowOffset-m.visibleRows())
-		case key.Matches(msg, keys.AppKeys.PageDown), key.Matches(msg, keys.AppKeys.NextPage):
+		case key.Matches(msg, keys.AppKeys.PageDown):
 			m.cursorRow = min(len(m.rows)-1, m.cursorRow+m.visibleRows())
 			m.rowOffset = min(m.maxRowOffset(), m.rowOffset+m.visibleRows())
 		case key.Matches(msg, keys.AppKeys.NextPage):
