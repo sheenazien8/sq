@@ -83,6 +83,10 @@ func (m Model) View() string {
 		return m.ColumnVisibilityModal.View()
 	}
 
+	if m.QueryHistoryModal.Visible() {
+		return m.QueryHistoryModal.View()
+	}
+
 	t := theme.Current
 
 	var sidebarView string

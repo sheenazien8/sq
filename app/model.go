@@ -13,6 +13,7 @@ import (
 	modaleditconnection "github.com/sheenazien8/sq/ui/modal-edit-connection"
 	"github.com/sheenazien8/sq/ui/modal-exit"
 	"github.com/sheenazien8/sq/ui/modal-help"
+	modalqueryhistory "github.com/sheenazien8/sq/ui/modal-query-history"
 	"github.com/sheenazien8/sq/ui/sidebar"
 	"github.com/sheenazien8/sq/ui/tab"
 	"github.com/sheenazien8/sq/ui/table"
@@ -40,6 +41,8 @@ const (
 	FocusConfirmModal
 	FocusAlertModal
 	FocusHelpModal
+	// FocusQueryHistoryModal is used when the query history modal is visible
+	FocusQueryHistoryModal
 )
 
 type Model struct {
@@ -57,6 +60,7 @@ type Model struct {
 	AlertModal            modal.Model
 	HelpModal             modalhelp.Model
 	ColumnVisibilityModal modal.Model
+	QueryHistoryModal     modalqueryhistory.Model
 	Focus                 Focus
 	previousFocus         Focus
 
@@ -137,6 +141,7 @@ func New() Model {
 	helpModal := modalhelp.New()
 	columnVisibilityContent := modalcolumnvisibility.New()
 	columnVisibilityModal := modal.New("Column Visibility", columnVisibilityContent)
+	queryHistoryModal := modalqueryhistory.New()
 	tabs := tab.New()
 
 	return Model{
@@ -153,6 +158,7 @@ func New() Model {
 		AlertModal:            alertModal,
 		HelpModal:             helpModal,
 		ColumnVisibilityModal: columnVisibilityModal,
+		QueryHistoryModal:     queryHistoryModal,
 		Focus:                 FocusSidebar,
 		previousFocus:         FocusSidebar,
 		dbConnections:         make(map[string]drivers.Driver),
