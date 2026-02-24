@@ -392,7 +392,7 @@ If you need to work with a specific non-public schema, the schema is automatical
   - The schema exists in your database
   - Your user has SELECT permissions on the schema
   - The schema is not a PostgreSQL system schema (`pg_catalog`, `information_schema`, `pg_toast`)
-- Check `debug.log` to see which schema was automatically detected
+- Check `~/.config/sq/debug.log` to see which schema was automatically detected
 
 **Connection refused**
 - Check that the database server is running and accessible
@@ -402,11 +402,12 @@ If you need to work with a specific non-public schema, the schema is automatical
 
 ### Debugging
 
-Debug logs are written to `debug.log` in the current directory. This can be helpful for troubleshooting connection issues or unexpected behavior.
+Debug logs are written to `~/.config/sq/debug.log` when the `DEBUG` environment variable is set to `true`. This can be helpful for troubleshooting connection issues or unexpected behavior.
 
 To enable detailed logging:
-1. Check the `debug.log` file in your current directory after launching sq
-2. Look for error messages related to your specific operation
+1. Run sq with `DEBUG=true sq`
+2. Check the `~/.config/sq/debug.log` file
+3. Look for error messages related to your specific operation
 3. Common issues like schema problems, query errors, and connection failures are logged here
 
 ## Contributing

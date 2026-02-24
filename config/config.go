@@ -22,8 +22,8 @@ func DefaultConfig() *Config {
 	}
 }
 
-// configDir returns the config directory path
-func configDir() (string, error) {
+// ConfigDir returns the config directory path
+func ConfigDir() (string, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
@@ -33,7 +33,7 @@ func configDir() (string, error) {
 
 // configPath returns the config file path
 func configPath() (string, error) {
-	dir, err := configDir()
+	dir, err := ConfigDir()
 	if err != nil {
 		return "", err
 	}
@@ -65,7 +65,7 @@ func Load() (*Config, error) {
 
 // Save writes the config to disk
 func (c *Config) Save() error {
-	dir, err := configDir()
+	dir, err := ConfigDir()
 	if err != nil {
 		return err
 	}

@@ -34,7 +34,7 @@ go mod tidy
 ```
 
 ### Debugging
-- Debug logs are written to `debug.log` in the current directory (configured in `main.go:12`)
+- Debug logs are written to `~/.config/sq/debug.log` when the `DEBUG` environment variable is set to `true`.
 - Use `tea.LogToFile()` for debugging TUI applications
 
 ## Project Structure
