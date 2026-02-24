@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sheenazien8/sq/keys"
 	"github.com/sheenazien8/sq/storage"
 	"github.com/sheenazien8/sq/ui/modal"
 	"github.com/sheenazien8/sq/ui/query-editor"
@@ -61,22 +63,22 @@ func (c *QueryHistoryContent) LoadForConnection(connName string, limit int) erro
 func (c *QueryHistoryContent) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "j", "down":
+		switch {
+		case key.Matches(msg, keys.AppKeys.Down):
 			if c.cursor < len(c.entries)-1 {
 				c.cursor++
 				if c.cursor >= c.start+c.visibleLines {
 					c.start = c.cursor - c.visibleLines + 1
 				}
 			}
-		case "k", "up":
+		case key.Matches(msg, keys.AppKeys.Up):
 			if c.cursor > 0 {
 				c.cursor--
 				if c.cursor < c.start {
 					c.start = c.cursor
 				}
 			}
-		case "enter":
+		case key.Matches(msg, keys.AppKeys.Confirm):
 			if c.cursor >= 0 && c.cursor < len(c.entries) {
 				q := c.entries[c.cursor].Query
 				c.closed = true
@@ -84,21 +86,21 @@ func (c *QueryHistoryContent) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 					return queryeditor.QueryLoadFromHistoryMsg{Query: q}
 				}
 			}
-		case "pgdown", "pagedown":
+		case msg.String() == "pgdown", msg.String() == "pagedown":
 			// page down
 			if c.start+c.visibleLines < len(c.entries) {
 				c.start = min(c.start+c.visibleLines, len(c.entries)-c.visibleLines)
 				c.cursor = min(c.cursor+c.visibleLines, len(c.entries)-1)
 			}
-		case "pgup", "pageup":
+		case msg.String() == "pgup", msg.String() == "pageup":
 			// page up
 			if c.start > 0 {
 				c.start = max(0, c.start-c.visibleLines)
 				c.cursor = max(0, c.cursor-c.visibleLines)
 			}
-		case "esc", "q":
+		case key.Matches(msg, keys.AppKeys.Cancel), key.Matches(msg, keys.AppKeys.Quit):
 			c.closed = true
-		case "y":
+		case msg.String() == "y":
 			// Copy selected query to clipboard via modal/parent handling
 			if c.cursor >= 0 && c.cursor < len(c.entries) {
 				q := c.entries[c.cursor].Query
@@ -120,14 +122,8 @@ func (c *QueryHistoryContent) View() string {
 	lines = append(lines, header, "")
 
 	limit := c.visibleLines
-	start := c.start
-	if start < 0 {
-		start = 0
-	}
-	end := start + limit
-	if end > len(c.entries) {
-		end = len(c.entries)
-	}
+	start := max(c.start, 0)
+	end := min(start + limit, len(c.entries))
 
 	for i := start; i < end; i++ {
 		e := c.entries[i]

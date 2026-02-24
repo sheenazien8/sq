@@ -4,8 +4,10 @@ import (
 	"strings"
 
 	"github.com/atotto/clipboard"
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sheenazien8/sq/keys"
 	"github.com/sheenazien8/sq/ui/theme"
 )
 
@@ -196,18 +198,18 @@ func NewConfirmContent(message string) *ConfirmContent {
 func (c *ConfirmContent) Update(msg tea.Msg) (Content, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "left", "h", "tab":
+		switch {
+		case key.Matches(msg, keys.AppKeys.Left), key.Matches(msg, keys.AppKeys.FocusNext):
 			c.selected = 0
-		case "right", "l", "shift+tab":
+		case key.Matches(msg, keys.AppKeys.Right), msg.String() == "shift+tab":
 			c.selected = 1
-		case "y", "Y":
+		case msg.String() == "y", msg.String() == "Y":
 			c.result = ResultYes
 			c.closed = true
-		case "n", "N", "esc":
+		case msg.String() == "n", msg.String() == "N", key.Matches(msg, keys.AppKeys.Cancel):
 			c.result = ResultNo
 			c.closed = true
-		case "enter":
+		case key.Matches(msg, keys.AppKeys.Confirm):
 			if c.selected == 0 {
 				c.result = ResultYes
 			} else {
@@ -314,12 +316,12 @@ func (c *AlertContent) SetMessage(message string) {
 func (c *AlertContent) Update(msg tea.Msg) (Content, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "left", "h", "tab":
+		switch {
+		case key.Matches(msg, keys.AppKeys.Left), key.Matches(msg, keys.AppKeys.FocusNext):
 			c.selected = 0
-		case "right", "l", "shift+tab":
+		case key.Matches(msg, keys.AppKeys.Right), msg.String() == "shift+tab":
 			c.selected = 1
-		case "c", "y":
+		case msg.String() == "c", msg.String() == "y":
 			if err := clipboard.WriteAll(c.Message); err != nil {
 				c.copyErr = err.Error()
 				c.copied = false
@@ -327,7 +329,7 @@ func (c *AlertContent) Update(msg tea.Msg) (Content, tea.Cmd) {
 				c.copied = true
 				c.copyErr = ""
 			}
-		case "enter":
+		case key.Matches(msg, keys.AppKeys.Confirm):
 			if c.selected == 0 {
 				if err := clipboard.WriteAll(c.Message); err != nil {
 					c.copyErr = err.Error()
@@ -340,7 +342,7 @@ func (c *AlertContent) Update(msg tea.Msg) (Content, tea.Cmd) {
 				c.result = ResultSubmit
 				c.closed = true
 			}
-		case "esc", "q":
+		case key.Matches(msg, keys.AppKeys.Cancel), key.Matches(msg, keys.AppKeys.Quit):
 			c.result = ResultSubmit
 			c.closed = true
 		}

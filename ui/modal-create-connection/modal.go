@@ -4,10 +4,12 @@ import (
 	"fmt"
 	"strconv"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/sheenazien8/sq/drivers"
+	"github.com/sheenazien8/sq/keys"
 	"github.com/sheenazien8/sq/logger"
 	"github.com/sheenazien8/sq/ui/modal"
 	"github.com/sheenazien8/sq/ui/theme"
@@ -227,20 +229,20 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 	case tea.KeyMsg:
 		// Handle text input fields for MySQL/PostgreSQL
 		if c.focusField >= FocusHostInput && c.focusField <= FocusDatabaseInput && c.GetDriver() != drivers.DriverTypeSQLite {
-			switch msg.String() {
-			case "esc":
+			switch {
+			case key.Matches(msg, keys.AppKeys.Cancel):
 				logger.Debug("Create connection cancelled", nil)
 				c.result = modal.ResultCancel
 				c.closed = true
 				return c, nil
-			case "tab", "down":
+			case key.Matches(msg, keys.AppKeys.FocusNext), key.Matches(msg, keys.AppKeys.Down):
 				c.focusField = (c.focusField + 1)
 				if c.focusField > FocusDatabaseInput {
 					c.focusField = FocusSubmitButton
 				}
 				c.updateFocus()
 				return c, nil
-			case "shift+tab", "up":
+			case msg.String() == "shift+tab", key.Matches(msg, keys.AppKeys.Up):
 				if c.focusField == FocusHostInput {
 					c.focusField = FocusNameInput
 				} else {
@@ -257,17 +259,17 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 
 		// Handle text input field for SQLite (only database input for file path)
 		if c.focusField == FocusDatabaseInput && c.GetDriver() == drivers.DriverTypeSQLite {
-			switch msg.String() {
-			case "esc":
+			switch {
+			case key.Matches(msg, keys.AppKeys.Cancel):
 				logger.Debug("Create connection cancelled", nil)
 				c.result = modal.ResultCancel
 				c.closed = true
 				return c, nil
-			case "tab", "down":
+			case key.Matches(msg, keys.AppKeys.FocusNext), key.Matches(msg, keys.AppKeys.Down):
 				c.focusField = FocusSubmitButton
 				c.updateFocus()
 				return c, nil
-			case "shift+tab", "up":
+			case msg.String() == "shift+tab", key.Matches(msg, keys.AppKeys.Up):
 				c.focusField = FocusNameInput
 				c.updateFocus()
 				return c, nil
@@ -279,25 +281,25 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 		}
 
 		if c.focusField == FocusDriverSelect {
-			switch msg.String() {
-			case "esc":
+			switch {
+			case key.Matches(msg, keys.AppKeys.Cancel):
 				logger.Debug("Create connection cancelled", nil)
 				c.result = modal.ResultCancel
 				c.closed = true
 				return c, nil
-			case "tab":
+			case key.Matches(msg, keys.AppKeys.FocusNext):
 				c.focusField = FocusNameInput
 				c.updateFocus()
 				return c, nil
-			case "shift+tab":
+			case msg.String() == "shift+tab":
 				c.focusField = FocusDriverSelect
 				c.updateFocus()
 				return c, nil
-			case "k":
+			case key.Matches(msg, keys.AppKeys.Up):
 				c.driverIndex = (c.driverIndex - 1 + len(c.drivers)) % len(c.drivers)
 				c.setDefaultPort()
 				return c, nil
-			case "j":
+			case key.Matches(msg, keys.AppKeys.Down):
 				c.driverIndex = (c.driverIndex + 1) % len(c.drivers)
 				c.setDefaultPort()
 				return c, nil
@@ -305,13 +307,13 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 		}
 
 		if c.focusField == FocusNameInput {
-			switch msg.String() {
-			case "esc":
+			switch {
+			case key.Matches(msg, keys.AppKeys.Cancel):
 				logger.Debug("Create connection cancelled", nil)
 				c.result = modal.ResultCancel
 				c.closed = true
 				return c, nil
-			case "tab", "down":
+			case key.Matches(msg, keys.AppKeys.FocusNext), key.Matches(msg, keys.AppKeys.Down):
 				// For SQLite, skip to database input (file path)
 				// For MySQL/PostgreSQL, go to host input
 				if c.GetDriver() == drivers.DriverTypeSQLite {
@@ -321,7 +323,7 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 				}
 				c.updateFocus()
 				return c, nil
-			case "shift+tab", "up":
+			case msg.String() == "shift+tab", key.Matches(msg, keys.AppKeys.Up):
 				c.focusField = FocusDriverSelect
 				c.updateFocus()
 				return c, nil
@@ -332,21 +334,21 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 			}
 		}
 
-		switch msg.String() {
-		case "esc":
+		switch {
+		case key.Matches(msg, keys.AppKeys.Cancel):
 			logger.Debug("Create connection cancelled", nil)
 			c.result = modal.ResultCancel
 			c.closed = true
 			return c, nil
 
-		case "tab", "down", "j":
+		case key.Matches(msg, keys.AppKeys.FocusNext), key.Matches(msg, keys.AppKeys.Down):
 			// Cycle forward through fields
 			if c.focusField < FocusCancelButton {
 				c.focusField = (c.focusField + 1) % (FocusCancelButton + 1)
 			}
 			c.updateFocus()
 
-		case "shift+tab", "up", "k":
+		case msg.String() == "shift+tab", key.Matches(msg, keys.AppKeys.Up):
 			// Cycle backward through fields
 			if c.focusField > FocusNameInput {
 				c.focusField = (c.focusField - 1)
@@ -355,7 +357,7 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 			}
 			c.updateFocus()
 
-		case "left", "h":
+		case key.Matches(msg, keys.AppKeys.Left):
 			// Navigate buttons
 			if c.focusField == FocusSubmitButton {
 				c.focusField = FocusCancelButton
@@ -363,7 +365,7 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 				c.focusField = FocusSubmitButton
 			}
 
-		case "right", "l":
+		case key.Matches(msg, keys.AppKeys.Right):
 			// Navigate buttons
 			if c.focusField == FocusSubmitButton {
 				c.focusField = FocusCancelButton
@@ -371,7 +373,7 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 				c.focusField = FocusSubmitButton
 			}
 
-		case "enter":
+		case key.Matches(msg, keys.AppKeys.Confirm):
 			if c.focusField == FocusSubmitButton {
 				if errMsg := c.validate(); errMsg != "" {
 					c.errorMsg = errMsg

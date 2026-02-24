@@ -3,8 +3,10 @@ package modalhelp
 import (
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sheenazien8/sq/keys"
 	"github.com/sheenazien8/sq/ui/modal"
 	"github.com/sheenazien8/sq/ui/theme"
 )
@@ -38,57 +40,55 @@ func NewHelpContent() *HelpContent {
 			{
 				Title: "Global",
 				Keymaps: []Keymap{
-					{"?", "Show this help"},
-					{"q / Ctrl+C", "Quit application"},
-					{"Tab", "Switch focus between panels"},
-					{"s", "Toggle sidebar"},
-					{"T", "Cycle themes"},
-					{"[", "Previous tab"},
-					{"]", "Next tab"},
-					{"Ctrl+W", "Close current tab"},
+					{keys.AppKeys.Help.Help().Key, keys.AppKeys.Help.Help().Desc},
+					{keys.AppKeys.Quit.Help().Key, keys.AppKeys.Quit.Help().Desc},
+					{keys.AppKeys.FocusNext.Help().Key, keys.AppKeys.FocusNext.Help().Desc},
+					{keys.AppKeys.ToggleTheme.Help().Key, keys.AppKeys.ToggleTheme.Help().Desc},
+					{keys.AppKeys.ToggleSidebar.Help().Key, keys.AppKeys.ToggleSidebar.Help().Desc},
+					{keys.AppKeys.NextTab.Help().Key, keys.AppKeys.NextTab.Help().Desc},
+					{keys.AppKeys.PrevTab.Help().Key, keys.AppKeys.PrevTab.Help().Desc},
+					{keys.AppKeys.CloseTab.Help().Key, keys.AppKeys.CloseTab.Help().Desc},
 				},
 			},
 			{
 				Title: "Sidebar",
 				Keymaps: []Keymap{
-					{"j / ↓", "Move down"},
-					{"k / ↑", "Move up"},
-					{"Enter", "Select/Connect database"},
-					{"e", "Open query editor"},
-					{"d", "View table structure"},
-					{"n", "New connection"},
-					{"/", "Filter connections/tables"},
-					{"C", "Clear filter"},
-					{"R", "Refresh connections"},
+					{keys.AppKeys.Down.Help().Key, keys.AppKeys.Down.Help().Desc},
+					{keys.AppKeys.Up.Help().Key, keys.AppKeys.Up.Help().Desc},
+					{keys.AppKeys.Confirm.Help().Key, "Select/Connect database"},
+					{keys.AppKeys.OpenQueryEditor.Help().Key, keys.AppKeys.OpenQueryEditor.Help().Desc},
+					{keys.AppKeys.ViewStructure.Help().Key, keys.AppKeys.ViewStructure.Help().Desc},
+					{keys.AppKeys.NewConnection.Help().Key, keys.AppKeys.NewConnection.Help().Desc},
+					{keys.AppKeys.Filter.Help().Key, keys.AppKeys.Filter.Help().Desc},
+					{keys.AppKeys.ClearFilter.Help().Key, keys.AppKeys.ClearFilter.Help().Desc},
+					{keys.AppKeys.Refresh.Help().Key, keys.AppKeys.Refresh.Help().Desc},
 				},
 			},
 			{
 				Title: "Table View",
 				Keymaps: []Keymap{
-					{"j / ↓", "Move down one row"},
-					{"k / ↑", "Move up one row"},
-					{"h / ←", "Move left one column"},
-					{"l / →", "Move right one column"},
-					{"J / PgDn", "Page down"},
-					{"K / PgUp", "Page up"},
-					{"H", "Jump to first column"},
-					{"L", "Jump to last column"},
-					{"Home", "Jump to first row"},
-					{"End", "Jump to last row"},
-					{">", "Next page (query)"},
-					{"<", "Previous page (query)"},
-					{"alt+right", "Increase column width"},
-					{"alt+left", "Decrease column width"},
+					{keys.AppKeys.Down.Help().Key, "Move down one row"},
+					{keys.AppKeys.Up.Help().Key, "Move up one row"},
+					{keys.AppKeys.Left.Help().Key, "Move left one column"},
+					{keys.AppKeys.Right.Help().Key, "Move right one column"},
+					{keys.AppKeys.PageDown.Help().Key, "Page down"},
+					{keys.AppKeys.PageUp.Help().Key, "Page up"},
+					{keys.AppKeys.JumpToFirstColumn.Help().Key, keys.AppKeys.JumpToFirstColumn.Help().Desc},
+					{keys.AppKeys.JumpToLastColumn.Help().Key, keys.AppKeys.JumpToLastColumn.Help().Desc},
+					{keys.AppKeys.Home.Help().Key, keys.AppKeys.Home.Help().Desc},
+					{keys.AppKeys.End.Help().Key, keys.AppKeys.End.Help().Desc},
+					{keys.AppKeys.NextPage.Help().Key, keys.AppKeys.NextPage.Help().Desc},
+					{keys.AppKeys.PrevPage.Help().Key, keys.AppKeys.PrevPage.Help().Desc},
 					{"Space", "Sort by column (toggle ASC/DESC)"},
-					{"y", "Yank (copy) cell"},
-					{"p", "Preview cell content"},
-					{"a", "Cell actions menu"},
-					{"gd", "Go to definition (FK)"},
-					{"Ctrl+T", "Toggle column visibility"},
-					{"/", "Focus filter"},
-					{"C", "Clear filter"},
-					{"e", "Open query editor"},
-					{"d", "View table structure"},
+					{keys.AppKeys.Yank.Help().Key, keys.AppKeys.Yank.Help().Desc},
+					{keys.AppKeys.Preview.Help().Key, keys.AppKeys.Preview.Help().Desc},
+					{keys.AppKeys.ActionMenu.Help().Key, keys.AppKeys.ActionMenu.Help().Desc},
+					{keys.AppKeys.GotoDefinition.Help().Key, keys.AppKeys.GotoDefinition.Help().Desc},
+					{keys.AppKeys.ColumnVisibility.Help().Key, keys.AppKeys.ColumnVisibility.Help().Desc},
+					{keys.AppKeys.Filter.Help().Key, keys.AppKeys.Filter.Help().Desc},
+					{keys.AppKeys.ClearFilter.Help().Key, keys.AppKeys.ClearFilter.Help().Desc},
+					{keys.AppKeys.OpenQueryEditor.Help().Key, keys.AppKeys.OpenQueryEditor.Help().Desc},
+					{keys.AppKeys.ViewStructure.Help().Key, keys.AppKeys.ViewStructure.Help().Desc},
 				},
 			},
 			{
@@ -127,22 +127,22 @@ func NewHelpContent() *HelpContent {
 					{"c", "Change selection"},
 					{"", ""},
 					{"", "─── All Modes ───"},
-					{"F5 / Ctrl+E", "Execute query"},
-					{"Ctrl+F", "Format SQL"},
-					{"Ctrl+Y", "Copy query to clipboard"},
-					{"Ctrl+R", "Toggle results focus"},
+					{keys.AppKeys.ExecuteQuery.Help().Key, keys.AppKeys.ExecuteQuery.Help().Desc},
+					{keys.AppKeys.FormatQuery.Help().Key, keys.AppKeys.FormatQuery.Help().Desc},
+					{keys.AppKeys.YankQuery.Help().Key, keys.AppKeys.YankQuery.Help().Desc},
+					{keys.AppKeys.SwitchEditorResultsPane.Help().Key, keys.AppKeys.SwitchEditorResultsPane.Help().Desc},
 				},
 			},
 			{
 				Title: "Filter",
 				Keymaps: []Keymap{
-					{"/", "Focus filter input"},
+					{keys.AppKeys.Filter.Help().Key, keys.AppKeys.Filter.Help().Desc},
 					{"Tab", "Complete current word"},
 					{"Ctrl+N", "Next suggestion"},
 					{"Ctrl+P", "Previous suggestion"},
-					{"Enter", "Apply filter & blur"},
-					{"Esc", "Blur without applying"},
-					{"Ctrl+C", "Clear filter & refresh"},
+					{keys.AppKeys.Confirm.Help().Key, "Apply filter & blur"},
+					{keys.AppKeys.Cancel.Help().Key, "Blur without applying"},
+					{keys.AppKeys.Quit.Help().Key, "Clear filter & refresh"},
 				},
 			},
 			{
@@ -152,9 +152,9 @@ func NewHelpContent() *HelpContent {
 					{"2", "Indexes section"},
 					{"3", "Relations section"},
 					{"4", "Triggers section"},
-					{"Tab", "Next section"},
-					{"j/k", "Navigate rows"},
-					{"h/l", "Navigate columns"},
+					{keys.AppKeys.FocusNext.Help().Key, "Next section"},
+					{keys.AppKeys.Down.Help().Key + "/" + keys.AppKeys.Up.Help().Key, "Navigate rows"},
+					{keys.AppKeys.Left.Help().Key + "/" + keys.AppKeys.Right.Help().Key, "Navigate columns"},
 				},
 			},
 		},
@@ -167,19 +167,19 @@ func NewHelpContent() *HelpContent {
 func (c *HelpContent) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "esc", "q", "?":
+		switch {
+		case key.Matches(msg, keys.AppKeys.Cancel), key.Matches(msg, keys.AppKeys.Quit), key.Matches(msg, keys.AppKeys.Help):
 			c.closed = true
-		case "tab", "l", "right":
+		case key.Matches(msg, keys.AppKeys.FocusNext), key.Matches(msg, keys.AppKeys.Right):
 			c.activeSection = (c.activeSection + 1) % len(c.sections)
 			c.scrollOffset = 0
-		case "shift+tab", "h", "left":
+		case msg.String() == "shift+tab", key.Matches(msg, keys.AppKeys.Left):
 			c.activeSection--
 			if c.activeSection < 0 {
 				c.activeSection = len(c.sections) - 1
 			}
 			c.scrollOffset = 0
-		case "j", "down":
+		case key.Matches(msg, keys.AppKeys.Down):
 			maxOffset := len(c.sections[c.activeSection].Keymaps) - c.visibleLines
 			if maxOffset < 0 {
 				maxOffset = 0
@@ -187,36 +187,36 @@ func (c *HelpContent) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 			if c.scrollOffset < maxOffset {
 				c.scrollOffset++
 			}
-		case "k", "up":
+		case key.Matches(msg, keys.AppKeys.Up):
 			if c.scrollOffset > 0 {
 				c.scrollOffset--
 			}
-		case "1":
+		case msg.String() == "1":
 			if len(c.sections) > 0 {
 				c.activeSection = 0
 				c.scrollOffset = 0
 			}
-		case "2":
+		case msg.String() == "2":
 			if len(c.sections) > 1 {
 				c.activeSection = 1
 				c.scrollOffset = 0
 			}
-		case "3":
+		case msg.String() == "3":
 			if len(c.sections) > 2 {
 				c.activeSection = 2
 				c.scrollOffset = 0
 			}
-		case "4":
+		case msg.String() == "4":
 			if len(c.sections) > 3 {
 				c.activeSection = 3
 				c.scrollOffset = 0
 			}
-		case "5":
+		case msg.String() == "5":
 			if len(c.sections) > 4 {
 				c.activeSection = 4
 				c.scrollOffset = 0
 			}
-		case "6":
+		case msg.String() == "6":
 			if len(c.sections) > 5 {
 				c.activeSection = 5
 				c.scrollOffset = 0

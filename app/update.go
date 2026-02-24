@@ -6,9 +6,11 @@ import (
 	"time"
 
 	"github.com/atotto/clipboard"
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/sheenazien8/sq/drivers"
+	"github.com/sheenazien8/sq/keys"
 	"github.com/sheenazien8/sq/logger"
 	"github.com/sheenazien8/sq/storage"
 
@@ -437,17 +439,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmd := m.Sidebar.UpdateFilterInput(msg)
 			cmds = append(cmds, cmd)
 
-			switch msg.String() {
-			case "enter":
+			switch {
+			case key.Matches(msg, keys.AppKeys.Confirm):
 				m.Sidebar.HideFilterInput()
 				m.Focus = FocusSidebar
 				m = m.updateFooter()
-			case "esc":
+			case key.Matches(msg, keys.AppKeys.Cancel):
 				m.Sidebar.HideFilterInput()
 				m.Sidebar.SetFilterVisible(false)
 				m.Focus = FocusSidebar
 				m = m.updateFooter()
-			case "ctrl+c":
+			case key.Matches(msg, keys.AppKeys.Quit):
 				m.Sidebar.ClearFilterInput()
 			}
 			return m, tea.Batch(cmds...)
@@ -785,14 +787,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// If query editor is active, pass most keys directly to it
 		// Only intercept specific control keys for app-level navigation
 		if m.Focus == FocusMain && m.Tabs.HasTabs() && m.Tabs.GetActiveTabType() == tab.TabTypeQuery {
-			switch msg.String() {
-			case "ctrl+c":
+			switch {
+			case key.Matches(msg, keys.AppKeys.Quit):
 				// Show exit modal
 				m.ExitModal.Show()
 				m.Focus = FocusExitModal
 				m = m.updateFooter()
 				return m, nil
-			case "tab":
+			case key.Matches(msg, keys.AppKeys.FocusNext):
 				// Switch to sidebar if not collapsed
 				if !m.sidebarCollapsed {
 					m.Focus = FocusSidebar
@@ -801,17 +803,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m = m.updateFooter()
 				}
 				return m, nil
-			case "]":
+			case key.Matches(msg, keys.AppKeys.NextTab):
 				m.Tabs.NextTab()
 
 				m = m.updateFooter()
 				return m, nil
-			case "[":
+			case key.Matches(msg, keys.AppKeys.PrevTab):
 				m.Tabs.PrevTab()
 
 				m = m.updateFooter()
 				return m, nil
-			case "ctrl+w":
+			case key.Matches(msg, keys.AppKeys.CloseTab):
 				m.Tabs.CloseTab(m.Tabs.ActiveTabIndex())
 				if !m.Tabs.HasTabs() {
 					m.Focus = FocusSidebar
@@ -838,15 +840,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		switch msg.String() {
-		case "?":
+		switch {
+		case key.Matches(msg, keys.AppKeys.Help):
 			// Show help modal
 			m.HelpModal.Show()
 			m.Focus = FocusHelpModal
 			m = m.updateFooter()
 			return m, nil
 
-		case "ctrl+t":
+		case key.Matches(msg, keys.AppKeys.ColumnVisibility):
 			// Show column visibility modal
 			if m.Focus == FocusMain && m.Tabs.HasTabs() && m.Tabs.GetActiveTabType() == tab.TabTypeTable {
 				// Get the current table model and set columns on the modal
@@ -863,14 +865,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
-		case "ctrl+c", "q":
+		case key.Matches(msg, keys.AppKeys.Quit):
 			if m.Focus == FocusSidebar || m.Focus == FocusMain {
 				m.ExitModal.Show()
 				m.Focus = FocusExitModal
 				m = m.updateFooter()
 			}
 
-		case "/", "f":
+		case key.Matches(msg, keys.AppKeys.Filter):
 			if m.Focus == FocusMain && m.Tabs.HasTabs() && m.Tabs.GetActiveTabType() == tab.TabTypeTable {
 				// Focus the filter in the active table tab
 				m.Tabs.FocusFilter()
@@ -892,14 +894,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, cmd)
 			}
 
-		case "n":
+		case key.Matches(msg, keys.AppKeys.NewConnection):
 			if m.Focus == FocusSidebar {
 				m.CreateConnectionModal.Show()
 				m.Focus = FocusCreateConnectionModal
 				m = m.updateFooter()
 			}
 
-		case "w", "W": // Edit connection
+		case key.Matches(msg, keys.AppKeys.EditConnection): // Edit connection
 			if m.Focus == FocusSidebar {
 				selectedItem := m.Sidebar.SelectedItem()
 				// Can only edit connections (level 0), not tables (level 1)
@@ -939,7 +941,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-		case "x", "X": // Delete connection
+		case key.Matches(msg, keys.AppKeys.DeleteConnection): // Delete connection
 			if m.Focus == FocusSidebar {
 				selectedItem := m.Sidebar.SelectedItem()
 				// Can only delete connections (level 0), not tables (level 1)
@@ -955,7 +957,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-		case "tab":
+		case key.Matches(msg, keys.AppKeys.FocusNext):
 			// Only allow switching to main table if tabs are open
 			if m.Focus == FocusSidebar {
 				if m.Tabs.HasTabs() {
@@ -982,7 +984,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-		case "T":
+		case key.Matches(msg, keys.AppKeys.ToggleTheme):
 			themes := theme.GetAvailableThemes()
 			m.themeIndex = (m.themeIndex + 1) % len(themes)
 			newTheme := themes[m.themeIndex]
@@ -994,7 +996,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m = m.updateStyles()
 
-		case "C":
+		case key.Matches(msg, keys.AppKeys.ClearFilter):
 			if m.Focus == FocusSidebar {
 				// Clear sidebar filter
 				m.Sidebar.SetFilterText("")
@@ -1007,13 +1009,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m = m.updateTabSize()
 			}
 
-		case "r", "R":
+		case key.Matches(msg, keys.AppKeys.Refresh):
 			if m.Focus == FocusSidebar {
 				// Refresh connections
 				m.Sidebar.RefreshConnections()
 			}
 
-		case "p":
+		case key.Matches(msg, keys.AppKeys.Preview):
 			if m.Focus == FocusMain && m.Tabs.HasTabs() {
 				// Get the selected cell content
 				activeTab := m.Tabs.ActiveTab()
@@ -1027,7 +1029,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-		case "a":
+		case key.Matches(msg, keys.AppKeys.ActionMenu):
 			if m.Focus == FocusMain && m.Tabs.HasTabs() && m.Tabs.GetActiveTabType() == tab.TabTypeTable {
 				// Show action modal for the selected cell
 				activeTab := m.Tabs.ActiveTab()
@@ -1055,7 +1057,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-		case "y":
+		case key.Matches(msg, keys.AppKeys.Yank):
 			if m.Focus == FocusMain && m.Tabs.HasTabs() {
 				// Yank (copy) the selected cell content to clipboard
 				activeTab := m.Tabs.ActiveTab()
@@ -1073,7 +1075,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-		case "d":
+		case key.Matches(msg, keys.AppKeys.ViewStructure):
+			// If keys.AppKeys.GotoDefinition is "gd", it will never match key.Matches directly.
+			// So we manually check if msg.String() == "d" && gPressed for backward compat.
+			if m.gPressed && msg.String() == "d" && m.Focus == FocusMain && m.Tabs.HasTabs() {
+				m.gPressed = false
+				_ = m.goToForeignKeyDefinition()
+				return m, nil
+			}
 			// Check if this is part of 'gd' sequence for go to definition
 			if m.gPressed && m.Focus == FocusMain && m.Tabs.HasTabs() {
 				m.gPressed = false
@@ -1138,14 +1147,19 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 			}
 
-		case "g":
+		case msg.String() == "g" || key.Matches(msg, keys.AppKeys.GotoDefinition):
+			// If it matched GotoDefinition directly (e.g. F12), execute immediately
+			if key.Matches(msg, keys.AppKeys.GotoDefinition) && len(keys.AppKeys.GotoDefinition.Keys()) > 0 && keys.AppKeys.GotoDefinition.Keys()[0] != "gd" {
+				_ = m.goToForeignKeyDefinition()
+				return m, nil
+			}
 			// Start of 'gd' sequence for go to definition
 			if m.Focus == FocusMain && m.Tabs.HasTabs() {
 				m.gPressed = true
 				logger.Debug("G pressed - waiting for D", nil)
 			}
 
-		case "e", "E":
+		case key.Matches(msg, keys.AppKeys.OpenQueryEditor):
 			// Open query editor in a new tab
 			activeDB := m.Sidebar.ActiveDatabase()
 			if activeDB != nil && activeDB.Connected {
@@ -1184,7 +1198,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				logger.Debug("Cannot open query editor: no active connection", map[string]any{})
 			}
 
-		case "s", "S":
+		case key.Matches(msg, keys.AppKeys.ToggleSidebar):
 			m.sidebarCollapsed = !m.sidebarCollapsed
 			// Recalculate layout after toggling sidebar
 			contentWidth := m.TerminalWidth
@@ -1521,44 +1535,103 @@ func (m Model) showAlert(message string) Model {
 func (m Model) getFooterHelp() string {
 	switch m.Focus {
 	case FocusSidebar:
-		return "?: Help | j/k: Navigate | Enter: Select | e: Query | n: New | w: Edit | x: Delete | /: Filter | Tab: Switch | q: Quit"
+		return fmt.Sprintf("%s: Help | %s/%s: Navigate | %s: Select | %s: Query | %s: New | %s: Edit | %s: Delete | %s: Filter | %s: Switch | %s: Quit",
+			keys.AppKeys.Help.Help().Key,
+			keys.AppKeys.Down.Help().Key, keys.AppKeys.Up.Help().Key,
+			keys.AppKeys.Confirm.Help().Key,
+			keys.AppKeys.OpenQueryEditor.Help().Key,
+			keys.AppKeys.NewConnection.Help().Key,
+			keys.AppKeys.EditConnection.Help().Key,
+			keys.AppKeys.DeleteConnection.Help().Key,
+			keys.AppKeys.Filter.Help().Key,
+			keys.AppKeys.FocusNext.Help().Key,
+			keys.AppKeys.Quit.Help().Key)
 	case FocusMain:
 		if m.Tabs.HasTabs() {
 			tabType := m.Tabs.GetActiveTabType()
 			if tabType == tab.TabTypeStructure {
-				return "?: Help | j/k/h/l: Navigate | 1-4: Sections | []: Tabs | Ctrl+W: Close | q: Quit"
+				return fmt.Sprintf("%s: Help | %s/%s/%s/%s: Navigate | 1-4: Sections | %s/%s: Tabs | %s: Close | %s: Quit",
+					keys.AppKeys.Help.Help().Key,
+					keys.AppKeys.Down.Help().Key, keys.AppKeys.Up.Help().Key, keys.AppKeys.Left.Help().Key, keys.AppKeys.Right.Help().Key,
+					keys.AppKeys.PrevTab.Help().Key, keys.AppKeys.NextTab.Help().Key,
+					keys.AppKeys.CloseTab.Help().Key,
+					keys.AppKeys.Quit.Help().Key)
 			}
 			if tabType == tab.TabTypeQuery {
-				return "?: Help | F5: Execute | Ctrl+R: Results | []: Tabs | Ctrl+W: Close | q: Quit"
+				return fmt.Sprintf("%s: Help | %s: Execute | %s: Results | %s/%s: Tabs | %s: Close | %s: Quit",
+					keys.AppKeys.Help.Help().Key,
+					keys.AppKeys.ExecuteQuery.Help().Key,
+					keys.AppKeys.SwitchEditorResultsPane.Help().Key,
+					keys.AppKeys.PrevTab.Help().Key, keys.AppKeys.NextTab.Help().Key,
+					keys.AppKeys.CloseTab.Help().Key,
+					keys.AppKeys.Quit.Help().Key)
 			}
-			return "?: Help | j/k/h/l: Navigate | Space: Sort | </>: Page | /: Filter | a: Actions | []: Tabs | q: Quit"
+			return fmt.Sprintf("%s: Help | %s/%s/%s/%s: Navigate | Space: Sort | %s/%s: Page | %s: Filter | %s: Actions | %s/%s: Tabs | %s: Quit",
+				keys.AppKeys.Help.Help().Key,
+				keys.AppKeys.Down.Help().Key, keys.AppKeys.Up.Help().Key, keys.AppKeys.Left.Help().Key, keys.AppKeys.Right.Help().Key,
+				keys.AppKeys.PrevPage.Help().Key, keys.AppKeys.NextPage.Help().Key,
+				keys.AppKeys.Filter.Help().Key,
+				keys.AppKeys.ActionMenu.Help().Key,
+				keys.AppKeys.PrevTab.Help().Key, keys.AppKeys.NextTab.Help().Key,
+				keys.AppKeys.Quit.Help().Key)
 		}
-		return "?: Help | s: Toggle Sidebar | Tab: Switch | q: Quit"
+		return fmt.Sprintf("%s: Help | %s: Toggle Sidebar | %s: Switch | %s: Quit",
+			keys.AppKeys.Help.Help().Key,
+			keys.AppKeys.ToggleSidebar.Help().Key,
+			keys.AppKeys.FocusNext.Help().Key,
+			keys.AppKeys.Quit.Help().Key)
 
 	case FocusSidebarFilter:
-		return "Enter: Apply | Esc: Cancel | Ctrl+C: Clear"
+		return fmt.Sprintf("%s: Apply | %s: Cancel | %s: Clear",
+			keys.AppKeys.Confirm.Help().Key,
+			keys.AppKeys.Cancel.Help().Key,
+			keys.AppKeys.Quit.Help().Key)
 	case FocusExitModal:
-		return "y: Yes | n/Esc: No | h/l: Switch"
+		return fmt.Sprintf("y: Yes | n/%s: No | %s/%s: Switch",
+			keys.AppKeys.Cancel.Help().Key,
+			keys.AppKeys.Left.Help().Key, keys.AppKeys.Right.Help().Key)
 	case FocusCreateConnectionModal:
-		return "Tab: Next Field | Enter: Submit | Esc: Cancel"
+		return fmt.Sprintf("%s: Next Field | %s: Submit | %s: Cancel",
+			keys.AppKeys.FocusNext.Help().Key,
+			keys.AppKeys.Confirm.Help().Key,
+			keys.AppKeys.Cancel.Help().Key)
 	case FocusEditConnectionModal:
-		return "Tab: Next Field | Enter: Update | Esc: Cancel"
+		return fmt.Sprintf("%s: Next Field | %s: Update | %s: Cancel",
+			keys.AppKeys.FocusNext.Help().Key,
+			keys.AppKeys.Confirm.Help().Key,
+			keys.AppKeys.Cancel.Help().Key)
 	case FocusDeleteConnectionModal:
-		return "Delete: Confirm | Esc: Cancel | y/n: Yes/No"
+		return fmt.Sprintf("Delete: Confirm | %s: Cancel | y/n: Yes/No",
+			keys.AppKeys.Cancel.Help().Key)
 	case FocusActionModal:
-		return "j/k: Navigate | Enter: Select | Esc: Cancel"
+		return fmt.Sprintf("%s/%s: Navigate | %s: Select | %s: Cancel",
+			keys.AppKeys.Down.Help().Key, keys.AppKeys.Up.Help().Key,
+			keys.AppKeys.Confirm.Help().Key,
+			keys.AppKeys.Cancel.Help().Key)
 	case FocusCellPreviewModal:
-		return "Esc: Close"
+		return fmt.Sprintf("%s: Close", keys.AppKeys.Cancel.Help().Key)
 	case FocusEditCellModal:
-		return "Enter: Confirm | Esc: Cancel"
+		return fmt.Sprintf("%s: Confirm | %s: Cancel",
+			keys.AppKeys.Confirm.Help().Key,
+			keys.AppKeys.Cancel.Help().Key)
 	case FocusConfirmModal:
-		return "y: Yes | n/Esc: No | h/l: Switch"
+		return fmt.Sprintf("y: Yes | n/%s: No | %s/%s: Switch",
+			keys.AppKeys.Cancel.Help().Key,
+			keys.AppKeys.Left.Help().Key, keys.AppKeys.Right.Help().Key)
 	case FocusAlertModal:
-		return "Enter/Esc: Close"
+		return fmt.Sprintf("%s/%s: Close",
+			keys.AppKeys.Confirm.Help().Key,
+			keys.AppKeys.Cancel.Help().Key)
 	case FocusHelpModal:
-		return "?: Help | ←→/Tab: Sections | j/k: Scroll | Esc/q: Close"
+		return fmt.Sprintf("%s: Help | %s/%s/%s: Sections | %s/%s: Scroll | %s/%s: Close",
+			keys.AppKeys.Help.Help().Key,
+			keys.AppKeys.Left.Help().Key, keys.AppKeys.Right.Help().Key, keys.AppKeys.FocusNext.Help().Key,
+			keys.AppKeys.Down.Help().Key, keys.AppKeys.Up.Help().Key,
+			keys.AppKeys.Cancel.Help().Key, keys.AppKeys.Quit.Help().Key)
 	default:
-		return "?: Help | q: Quit"
+		return fmt.Sprintf("%s: Help | %s: Quit",
+			keys.AppKeys.Help.Help().Key,
+			keys.AppKeys.Quit.Help().Key)
 	}
 }
 

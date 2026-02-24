@@ -3,8 +3,10 @@ package modalcolumnvisibility
 import (
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sheenazien8/sq/keys"
 	"github.com/sheenazien8/sq/ui/modal"
 	"github.com/sheenazien8/sq/ui/table"
 	"github.com/sheenazien8/sq/ui/theme"
@@ -113,13 +115,13 @@ func (c *ColumnVisibilityContent) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 	case tea.KeyMsg:
 		// Handle search mode text input
 		if c.searchMode {
-			switch msg.String() {
-			case "backspace":
+			switch {
+			case msg.String() == "backspace":
 				if len(c.searchText) > 0 {
 					c.searchText = c.searchText[:len(c.searchText)-1]
 					c.updateFilteredColumns()
 				}
-			case "enter", "escape":
+			case key.Matches(msg, keys.AppKeys.Confirm), msg.String() == "escape":
 				// Exit search mode
 				c.searchMode = false
 			default:
@@ -133,31 +135,31 @@ func (c *ColumnVisibilityContent) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 		}
 
 		// Normal mode key handling
-		switch msg.String() {
-		case "/":
+		switch {
+		case msg.String() == "/":
 			// Enter search mode
 			c.searchMode = true
-		case "up", "k":
+		case key.Matches(msg, keys.AppKeys.Up):
 			if c.cursor > 0 {
 				c.cursor--
 				if c.cursor < c.scrollOffset {
 					c.scrollOffset = c.cursor
 				}
 			}
-		case "down", "j":
+		case key.Matches(msg, keys.AppKeys.Down):
 			if c.cursor < len(c.filteredIndices)-1 {
 				c.cursor++
 				if c.cursor >= c.scrollOffset+c.visibleLines {
 					c.scrollOffset = c.cursor - c.visibleLines + 1
 				}
 			}
-		case " ":
+		case msg.String() == " ":
 			// Toggle current column visibility
 			if c.cursor >= 0 && c.cursor < len(c.filteredIndices) {
 				originalIdx := c.filteredIndices[c.cursor]
 				c.columns[originalIdx].Hidden = !c.columns[originalIdx].Hidden
 			}
-		case "a", "A":
+		case msg.String() == "a", msg.String() == "A":
 			// Toggle all filtered columns visibility
 			allVisible := true
 			for _, idx := range c.filteredIndices {
@@ -169,7 +171,7 @@ func (c *ColumnVisibilityContent) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 			for _, idx := range c.filteredIndices {
 				c.columns[idx].Hidden = allVisible
 			}
-		case "enter":
+		case key.Matches(msg, keys.AppKeys.Confirm):
 			// Confirm and close
 			c.closed = true
 			c.result = modal.ResultSubmit
@@ -179,14 +181,14 @@ func (c *ColumnVisibilityContent) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 			return c, func() tea.Msg {
 				return *c.toggleResult
 			}
-		case "esc":
+		case key.Matches(msg, keys.AppKeys.Cancel):
 			// Cancel - restore original visibility
 			for i := range c.columns {
 				c.columns[i].Hidden = !c.originalVisibility[i]
 			}
 			c.closed = true
 			c.result = modal.ResultCancel
-		case "ctrl+c", "q":
+		case key.Matches(msg, keys.AppKeys.Quit):
 			// Cancel - restore original visibility
 			for i := range c.columns {
 				c.columns[i].Hidden = !c.originalVisibility[i]

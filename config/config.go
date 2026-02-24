@@ -8,8 +8,9 @@ import (
 
 // Config holds the application configuration
 type Config struct {
-	Theme          string `json:"theme"`
-	AutoFitColumns bool   `json:"auto_fit_columns"`
+	Theme          string              `json:"theme"`
+	AutoFitColumns bool                `json:"auto_fit_columns"`
+	Keybindings    map[string][]string `json:"keybindings,omitempty"`
 }
 
 // DefaultConfig returns the default configuration
@@ -17,6 +18,7 @@ func DefaultConfig() *Config {
 	return &Config{
 		Theme:          "default",
 		AutoFitColumns: true, // Auto-fit columns to content by default
+		Keybindings:    make(map[string][]string),
 	}
 }
 

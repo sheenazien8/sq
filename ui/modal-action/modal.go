@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sheenazien8/sq/keys"
 	"github.com/sheenazien8/sq/ui/modal"
 	"github.com/sheenazien8/sq/ui/theme"
 )
@@ -178,20 +180,20 @@ func (a *ActionContent) SetContext(cellValue string, rowData []string, columnNam
 func (a *ActionContent) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "up", "k":
+		switch {
+		case key.Matches(msg, keys.AppKeys.Up):
 			if a.selectedIndex > 0 {
 				a.selectedIndex--
 			}
-		case "down", "j":
+		case key.Matches(msg, keys.AppKeys.Down):
 			if a.selectedIndex < len(a.actions)-1 {
 				a.selectedIndex++
 			}
-		case "enter":
+		case key.Matches(msg, keys.AppKeys.Confirm):
 			a.selectedAction = a.actions[a.selectedIndex].Action
 			a.closed = true
 			return a, nil
-		case "esc":
+		case key.Matches(msg, keys.AppKeys.Cancel):
 			a.selectedAction = ActionNone
 			a.closed = true
 			return a, nil

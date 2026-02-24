@@ -3,9 +3,11 @@ package modalcellpreview
 import (
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sheenazien8/sq/keys"
 	"github.com/sheenazien8/sq/ui/modal"
 	"github.com/sheenazien8/sq/ui/theme"
 )
@@ -107,8 +109,8 @@ func (p *PreviewContent) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "esc", "enter":
+		switch {
+		case key.Matches(msg, keys.AppKeys.Cancel), key.Matches(msg, keys.AppKeys.Confirm):
 			// Close the modal
 			p.closed = true
 			return p, nil

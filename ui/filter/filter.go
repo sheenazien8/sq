@@ -4,9 +4,11 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/textinput"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sheenazien8/sq/keys"
 	"github.com/sheenazien8/sq/ui/theme"
 )
 
@@ -167,35 +169,35 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		key := msg.String()
+		k := msg.String()
 
 		// Handle enter to apply and blur
-		if key == "enter" {
+		if key.Matches(msg, keys.AppKeys.Confirm) {
 			m.Apply()
 			m.Blur()
 			return m, func() tea.Msg {
 				return MapKeyMsg{
-					Key: key,
+					Key: k,
 				}
 			}
 		}
 
 		// Handle escape to blur without applying
-		if key == "esc" {
+		if key.Matches(msg, keys.AppKeys.Cancel) {
 			m.Blur()
 			return m, func() tea.Msg {
 				return MapKeyMsg{
-					Key: key,
+					Key: k,
 				}
 			}
 		}
 
 		// Handle clear
-		if key == "ctrl+c" {
+		if key.Matches(msg, keys.AppKeys.Quit) {
 			m.Clear()
 			return m, func() tea.Msg {
 				return MapKeyMsg{
-					Key: key,
+					Key: k,
 				}
 			}
 		}
@@ -204,7 +206,7 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		m.updateWordCompletion()
 
 		// Handle tab completion for current word
-		if key == "tab" && m.currentWord != "" {
+		if key.Matches(msg, keys.AppKeys.FocusNext) && m.currentWord != "" {
 			availableSuggestions := m.filterInput.AvailableSuggestions()
 			if len(availableSuggestions) > 0 {
 				currentSuggestion := availableSuggestions[0] // Use first available suggestion

@@ -1,8 +1,10 @@
 package modaldeleteconnection
 
 import (
+	"github.com/charmbracelet/bubbles/key"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/sheenazien8/sq/keys"
 	"github.com/sheenazien8/sq/logger"
 	"github.com/sheenazien8/sq/ui/modal"
 	"github.com/sheenazien8/sq/ui/theme"
@@ -46,13 +48,13 @@ func (c *Content) LoadConnection(id int64, name string) {
 func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "esc":
+		switch {
+		case key.Matches(msg, keys.AppKeys.Cancel):
 			c.result = modal.ResultCancel
 			c.closed = true
 			return c, nil
 
-		case "tab", "left", "h", "right", "l":
+		case key.Matches(msg, keys.AppKeys.FocusNext), key.Matches(msg, keys.AppKeys.Left), key.Matches(msg, keys.AppKeys.Right):
 			// Toggle between buttons
 			if c.focusButton == FocusDeleteButton {
 				c.focusButton = FocusCancelButton
@@ -60,7 +62,7 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 				c.focusButton = FocusDeleteButton
 			}
 
-		case "enter", "y":
+		case key.Matches(msg, keys.AppKeys.Confirm), msg.String() == "y":
 			if c.focusButton == FocusDeleteButton {
 				logger.Info("Connection delete confirmed", map[string]any{
 					"connectionID": c.connectionID,
@@ -74,7 +76,7 @@ func (c *Content) Update(msg tea.Msg) (modal.Content, tea.Cmd) {
 				c.closed = true
 			}
 
-		case "n":
+		case msg.String() == "n":
 			logger.Debug("Connection delete cancelled", nil)
 			c.result = modal.ResultCancel
 			c.closed = true
