@@ -31,7 +31,7 @@ func New() Model {
 }
 
 func (m Model) calculateLines() []string {
-    if len(m.columns) == 0 || m.row == nil || len(m.row) == 0 {
+	if len(m.columns) == 0 || m.row == nil || len(m.row) == 0 {
 		return []string{}
 	}
 
@@ -92,16 +92,16 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 				m.offset--
 			}
 		} else if key.Matches(msg, keys.AppKeys.DetailScrollDown) {
-            lines := m.calculateLines()
-            visibleHeight := m.height - 2
-            if visibleHeight <= 0 {
-                // Not enough height to scroll; keep offset unchanged.
-                break
-            }
-            maxOffset := len(lines) - visibleHeight
-            if maxOffset < 0 {
-                maxOffset = 0
-            }
+			lines := m.calculateLines()
+			visibleHeight := m.height - 2
+			if visibleHeight <= 0 {
+				// Not enough height to scroll; keep offset unchanged.
+				break
+			}
+			maxOffset := len(lines) - visibleHeight
+			if maxOffset < 0 {
+				maxOffset = 0
+			}
 			logger.Debug("Detail scroll down key pressed", map[string]any{"current_offset": m.offset, "total_lines": len(lines), "height": m.height, "max_offset": maxOffset})
 			if m.offset < maxOffset {
 				m.offset++
@@ -194,7 +194,7 @@ func (m Model) View() string {
 		return borderStyle.Render(emptyStyle.Render(emptyMsg))
 	}
 
-    lines := m.calculateLines()
+	lines := m.calculateLines()
 	visibleHeight := m.height - 2
 
 	if visibleHeight <= 0 {
@@ -216,20 +216,6 @@ func (m Model) View() string {
 	return borderStyle.Render(renderedContent)
 }
 
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func wordWrap(text string, width int) string {
 	if width <= 0 {
 		return text
@@ -238,28 +224,92 @@ func wordWrap(text string, width int) string {
 	var result strings.Builder
 	var currentLine strings.Builder
 
+	lineWidth := 0
 	words := strings.Fields(text)
 	if len(words) == 0 {
 		return text
 	}
 
-	for _, word := range words {
+	writeLine := func() {
 		if currentLine.Len() == 0 {
-			currentLine.WriteString(word)
-		} else {
-			if currentLine.Len()+1+len(word) > width {
-				result.WriteString(currentLine.String() + "\n")
-				currentLine.Reset()
+			return
+		}
+		if result.Len() > 0 {
+			result.WriteString("\n")
+		}
+		result.WriteString(currentLine.String())
+		currentLine.Reset()
+		lineWidth = 0
+	}
+
+	for _, word := range words {
+		wordWidth := lipgloss.Width(word)
+		handleLongWord := func() {
+			chunks := splitByWidth(word, width)
+			for _, chunk := range chunks {
+				if lineWidth > 0 {
+					writeLine()
+				}
+				currentLine.WriteString(chunk)
+				lineWidth = lipgloss.Width(chunk)
+				writeLine()
+			}
+		}
+		if lineWidth == 0 {
+			if wordWidth <= width {
 				currentLine.WriteString(word)
+				lineWidth = wordWidth
 			} else {
-				currentLine.WriteString(" " + word)
+				handleLongWord()
+			}
+		} else {
+			spaceWidth := 1
+			if lineWidth+spaceWidth+wordWidth <= width {
+				currentLine.WriteString(" ")
+				currentLine.WriteString(word)
+				lineWidth += spaceWidth + wordWidth
+			} else {
+				// Move to a new line.
+				writeLine()
+				if wordWidth <= width {
+					currentLine.WriteString(word)
+					lineWidth = wordWidth
+				} else {
+					handleLongWord()
+				}
 			}
 		}
 	}
-
 	if currentLine.Len() > 0 {
+		if result.Len() > 0 {
+			result.WriteString("\n")
+		}
 		result.WriteString(currentLine.String())
 	}
-
 	return result.String()
+}
+
+// splitByWidth splits s into chunks whose terminal cell width does not exceed width.
+func splitByWidth(s string, width int) []string {
+	if width <= 0 {
+		return []string{s}
+	}
+	var chunks []string
+	var b strings.Builder
+	currentWidth := 0
+	for _, r := range s {
+		rStr := string(r)
+		rWidth := lipgloss.Width(rStr)
+		if currentWidth+rWidth > width && currentWidth > 0 {
+			chunks = append(chunks, b.String())
+			b.Reset()
+			currentWidth = 0
+		}
+		b.WriteRune(r)
+		currentWidth += rWidth
+	}
+	if b.Len() > 0 {
+		chunks = append(chunks, b.String())
+	}
+	return chunks
 }
