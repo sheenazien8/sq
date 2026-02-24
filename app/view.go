@@ -22,17 +22,6 @@ func intToStr(n int) string {
 	return string(digits)
 }
 
-func joinStrings(strs []string, sep string) string {
-	if len(strs) == 0 {
-		return ""
-	}
-	result := strs[0]
-	for i := 1; i < len(strs); i++ {
-		result += sep + strs[i]
-	}
-	return result
-}
-
 // View renders the main application view
 func (m Model) View() string {
 	if m.TerminalWidth == 0 || m.TerminalHeight == 0 {
