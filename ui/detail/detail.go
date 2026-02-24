@@ -79,7 +79,11 @@ func (m Model) calculateLines() []string {
 		}
 	}
 
-	return strings.Split(content.String(), "\n")
+	trimmed := strings.TrimRight(content.String(), "\n")
+	if trimmed == "" {
+		return []string{}
+	}
+	return strings.Split(trimmed, "\n")
 }
 
 // Update handles messages
