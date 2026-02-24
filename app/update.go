@@ -26,6 +26,52 @@ import (
 )
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	newModel, cmd := m.handleUpdate(msg)
+
+	if newModel.Detail.Visible() {
+		newDetail, detailCmd := newModel.Detail.Update(msg)
+		newModel.Detail = newDetail
+
+		var cmds []tea.Cmd
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		if detailCmd != nil {
+			cmds = append(cmds, detailCmd)
+		}
+		cmd = tea.Batch(cmds...)
+	}
+
+	newModel = newModel.syncDetailPane()
+	return newModel, cmd
+}
+
+func (m Model) syncDetailPane() Model {
+	if !m.Detail.Visible() {
+		return m
+	}
+	if !m.Tabs.HasTabs() {
+		m.Detail.SetData(nil, nil)
+		return m
+	}
+	activeTab := m.Tabs.ActiveTab()
+	if activeTab == nil || activeTab.Type != tab.TabTypeTable {
+		m.Detail.SetData(nil, nil)
+		return m
+	}
+	tableModel, ok := activeTab.Content.(table.Model)
+	if !ok {
+		m.Detail.SetData(nil, nil)
+		return m
+	}
+
+	columns := tableModel.GetAllColumns()
+	row := tableModel.SelectedRow()
+	m.Detail.SetData(columns, row)
+	return m
+}
+
+func (m Model) handleUpdate(msg tea.Msg) (Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
@@ -308,10 +354,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			)
 		}
 
-		// Set tab dimensions (filter bar is always 3 lines with border)
-		tableWidth := m.ContentWidth - 4
-		tableHeight := m.ContentHeight - 3 - 2
-		m.Tabs.SetSize(tableWidth, tableHeight)
+		// Set tab dimensions
+		m = m.updateTabSize()
 
 		// Log whether tab was created or switched
 		if newTabCreated {
@@ -366,10 +410,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.ContentWidth = contentWidth
 		m.ContentHeight = contentHeight
 
-		tableWidth := contentWidth - 4
-		// Filter bar is always 3 lines (with border)
-		tableHeight := contentHeight - 3 - 2
-
 		if !m.initialized {
 			logger.Debug("Initial window size", map[string]any{
 				"width":  msg.Width,
@@ -378,7 +418,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.initialized = true
 
 		}
-		m.Tabs.SetSize(tableWidth, tableHeight)
+		m = m.updateTabSize()
 
 		m.Sidebar.SetSize(m.SidebarWidth, contentHeight)
 
@@ -1178,10 +1218,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					tabName := "Query"
 					m.Tabs.AddQueryTab(tabName, activeDB.Name, dbName)
 
-					// Set tab dimensions
-					tableWidth := m.ContentWidth - 4
-					tableHeight := m.ContentHeight - 3 - 2
-					m.Tabs.SetSize(tableWidth, tableHeight)
+					m = m.updateTabSize()
 
 					// Switch focus to main area
 					m.Focus = FocusMain
@@ -1206,8 +1243,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				contentWidth -= m.SidebarWidth
 			}
 			m.ContentWidth = contentWidth
-			m.Tabs.SetSize(contentWidth-4, m.ContentHeight)
+			m = m.updateTabSize()
 			m = m.updateFooter()
+
+		case key.Matches(msg, keys.AppKeys.ToggleDetail):
+			m.Detail.ToggleVisibility()
+			m = m.updateTabSize()
+			m = m.updateFooter()
+
+		case key.Matches(msg, keys.AppKeys.DetailScrollUp), key.Matches(msg, keys.AppKeys.DetailScrollDown):
+			if m.Detail.Visible() {
+				// Detail pane handles these in its own Update, we just return here
+				// so the wrapper loop correctly updates m.Detail without passing
+				// the key to m.Tabs
+				return m, nil
+			}
 
 		default:
 			// Reset gPressed flag for any key that doesn't continue the sequence
@@ -1507,6 +1557,18 @@ func (m Model) updateTabSize() Model {
 	tableWidth := m.ContentWidth - 4
 	contentHeight := m.ContentHeight
 
+	if m.Detail.Visible() {
+		detailW := 40
+		if detailW > m.ContentWidth/3 {
+			detailW = m.ContentWidth / 3
+		}
+		if detailW < 20 {
+			detailW = 20
+		}
+		tableWidth -= detailW
+		m.Detail.SetSize(detailW, contentHeight-2)
+	}
+
 	// Filter bar is always 3 lines (with border)
 	filterBarHeight := 3
 
@@ -1566,11 +1628,12 @@ func (m Model) getFooterHelp() string {
 					keys.AppKeys.CloseTab.Help().Key,
 					keys.AppKeys.Quit.Help().Key)
 			}
-			return fmt.Sprintf("%s: Help | %s/%s/%s/%s: Navigate | Space: Sort | %s/%s: Page | %s: Filter | %s: Actions | %s/%s: Tabs | %s: Quit",
+			return fmt.Sprintf("%s: Help | %s/%s/%s/%s: Navigate | Space: Sort | %s/%s: Page | %s: Filter | %s: Detail | %s: Actions | %s/%s: Tabs | %s: Quit",
 				keys.AppKeys.Help.Help().Key,
 				keys.AppKeys.Down.Help().Key, keys.AppKeys.Up.Help().Key, keys.AppKeys.Left.Help().Key, keys.AppKeys.Right.Help().Key,
 				keys.AppKeys.PrevPage.Help().Key, keys.AppKeys.NextPage.Help().Key,
 				keys.AppKeys.Filter.Help().Key,
+				keys.AppKeys.ToggleDetail.Help().Key,
 				keys.AppKeys.ActionMenu.Help().Key,
 				keys.AppKeys.PrevTab.Help().Key, keys.AppKeys.NextTab.Help().Key,
 				keys.AppKeys.Quit.Help().Key)
@@ -1690,10 +1753,7 @@ func (m *Model) loadTableStructure() error {
 	tabName := connectionName + "." + tableName
 	newTabCreated := m.Tabs.AddStructureTab(tabName, structure)
 
-	// Set tab dimensions
-	tableWidth := m.ContentWidth - 4
-	tableHeight := m.ContentHeight - 3 - 2
-	m.Tabs.SetSize(tableWidth, tableHeight)
+	*m = m.updateTabSize()
 
 	// Log whether tab was created or switched
 	if newTabCreated {
@@ -1859,9 +1919,7 @@ func (m *Model) goToForeignKeyDefinition() error {
 		m.Tabs.FocusFilter()
 	}
 
-	tableWidth := m.ContentWidth - 4
-	tableHeight := m.ContentHeight - 3 - 2
-	m.Tabs.SetSize(tableWidth, tableHeight)
+	*m = m.updateTabSize()
 
 	return nil
 }

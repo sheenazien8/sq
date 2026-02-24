@@ -9,6 +9,7 @@ type KeyMap struct {
 	Help          key.Binding
 	ToggleTheme   key.Binding
 	ToggleSidebar key.Binding
+	ToggleDetail  key.Binding
 	ClearFilter   key.Binding
 	FocusNext     key.Binding
 
@@ -52,6 +53,10 @@ type KeyMap struct {
 	FormatQuery             key.Binding
 	QueryHistory            key.Binding
 	YankQuery               key.Binding
+
+	// Detail specific
+	DetailScrollUp   key.Binding
+	DetailScrollDown key.Binding
 }
 
 // AppKeys is the global instance of key bindings
@@ -75,6 +80,10 @@ func DefaultKeyMap() KeyMap {
 		ToggleSidebar: key.NewBinding(
 			key.WithKeys("s", "S"),
 			key.WithHelp("s", "sidebar"),
+		),
+		ToggleDetail: key.NewBinding(
+			key.WithKeys("D"),
+			key.WithHelp("D", "detail pane"),
 		),
 		ClearFilter: key.NewBinding(
 			key.WithKeys("C"),
@@ -229,9 +238,13 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("ctrl+y"),
 			key.WithHelp("ctrl+y", "yank query"),
 		),
-		QueryHistory: key.NewBinding(
-			key.WithKeys("H"),
-			key.WithHelp("H", "query history"),
+		DetailScrollUp: key.NewBinding(
+			key.WithKeys("ctrl+u"),
+			key.WithHelp("ctrl+u", "detail up"),
+		),
+		DetailScrollDown: key.NewBinding(
+			key.WithKeys("ctrl+d"),
+			key.WithHelp("ctrl+d", "detail down"),
 		),
 	}
 
@@ -243,7 +256,6 @@ func UpdateFromConfig(configMap map[string][]string) {
 		return
 	}
 
-	// Helper to apply config if present
 	apply := func(keyName string, binding *key.Binding) {
 		if keys, ok := configMap[keyName]; ok && len(keys) > 0 {
 			*binding = key.NewBinding(
@@ -257,6 +269,7 @@ func UpdateFromConfig(configMap map[string][]string) {
 	apply("help", &AppKeys.Help)
 	apply("toggle_theme", &AppKeys.ToggleTheme)
 	apply("toggle_sidebar", &AppKeys.ToggleSidebar)
+	apply("toggle_detail", &AppKeys.ToggleDetail)
 	apply("clear_filter", &AppKeys.ClearFilter)
 	apply("focus_next", &AppKeys.FocusNext)
 
@@ -298,4 +311,6 @@ func UpdateFromConfig(configMap map[string][]string) {
 	apply("format_query", &AppKeys.FormatQuery)
 	apply("query_history", &AppKeys.QueryHistory)
 	apply("yank_query", &AppKeys.YankQuery)
+	apply("detail_scroll_up", &AppKeys.DetailScrollUp)
+	apply("detail_scroll_down", &AppKeys.DetailScrollDown)
 }

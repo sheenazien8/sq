@@ -110,10 +110,23 @@ func (m Model) View() string {
 	var mainArea string
 
 	// Show tabs if they exist, otherwise show placeholder
+	tabWidth := m.ContentWidth - 4
+	if m.Detail.Visible() {
+		// Calculate detail pane width, max 40 cols, at least 20 cols
+		detailW := 40
+		if detailW > m.ContentWidth/3 {
+			detailW = m.ContentWidth / 3
+		}
+		if detailW < 20 {
+			detailW = 20
+		}
+		tabWidth -= detailW
+	}
+
 	if m.Tabs.HasTabs() {
 		// For all tabs, use full height since filter is now inside tab for table tabs
 		contentView := tableBorderStyle.
-			Width(m.ContentWidth - 4).
+			Width(tabWidth).
 			Height(contentHeight).
 			Render(m.Tabs.View())
 		mainArea = contentView
@@ -123,15 +136,20 @@ func (m Model) View() string {
 		placeholderStyle := lipgloss.NewStyle().
 			Foreground(t.Colors.ForegroundDim).
 			Align(lipgloss.Center, lipgloss.Center).
-			Width(m.ContentWidth - 4).
+			Width(tabWidth).
 			Height(contentHeight - 2)
 
 		placeholder := placeholderStyle.Render("Select a table from the sidebar to open it in a tab\n(Press Enter on a table to open)")
 
 		mainArea = tableBorderStyle.
-			Width(m.ContentWidth - 4).
+			Width(tabWidth).
 			Height(contentHeight).
 			Render(placeholder)
+	}
+
+	if m.Detail.Visible() {
+		detailView := m.Detail.View()
+		mainArea = lipgloss.JoinHorizontal(lipgloss.Top, mainArea, detailView)
 	}
 
 	var middleSection string

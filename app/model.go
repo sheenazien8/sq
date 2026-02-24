@@ -4,6 +4,7 @@ import (
 	"github.com/sheenazien8/sq/config"
 	"github.com/sheenazien8/sq/drivers"
 	"github.com/sheenazien8/sq/keys"
+	"github.com/sheenazien8/sq/ui/detail"
 	"github.com/sheenazien8/sq/ui/modal"
 	"github.com/sheenazien8/sq/ui/modal-action"
 	"github.com/sheenazien8/sq/ui/modal-cell-preview"
@@ -50,6 +51,7 @@ type Model struct {
 	Sidebar               sidebar.Model
 	Main                  table.Model
 	Tabs                  tab.Model
+	Detail                detail.Model
 	ExitModal             modalexit.Model
 	CreateConnectionModal modalcreateconnection.Model
 	EditConnectionModal   modaleditconnection.Model
@@ -145,10 +147,12 @@ func New() Model {
 	columnVisibilityModal := modal.New("Column Visibility", columnVisibilityContent)
 	queryHistoryModal := modalqueryhistory.New()
 	tabs := tab.New()
+	detailPane := detail.New()
 
 	return Model{
 		Sidebar:               s,
 		Tabs:                  tabs,
+		Detail:                detailPane,
 		ExitModal:             exitModal,
 		CreateConnectionModal: createConnectionModal,
 		EditConnectionModal:   editConnectionModal,
