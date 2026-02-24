@@ -6,33 +6,6 @@ import (
 	"github.com/sheenazien8/sq/ui/theme"
 )
 
-// Helper functions
-func intToStr(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	if n < 0 {
-		return "-" + intToStr(-n)
-	}
-	var digits []byte
-	for n > 0 {
-		digits = append([]byte{byte(n%10) + '0'}, digits...)
-		n /= 10
-	}
-	return string(digits)
-}
-
-func joinStrings(strs []string, sep string) string {
-	if len(strs) == 0 {
-		return ""
-	}
-	result := strs[0]
-	for i := 1; i < len(strs); i++ {
-		result += sep + strs[i]
-	}
-	return result
-}
-
 // View renders the main application view
 func (m Model) View() string {
 	if m.TerminalWidth == 0 || m.TerminalHeight == 0 {
@@ -110,10 +83,17 @@ func (m Model) View() string {
 	var mainArea string
 
 	// Show tabs if they exist, otherwise show placeholder
+	tabWidth := m.ContentWidth - 4
+	// adjust for detail pane if visible (use same logic as updateTabSize)
+	detailW := m.detailPaneWidth()
+	if detailW > 0 {
+		tabWidth -= detailW
+	}
+
 	if m.Tabs.HasTabs() {
 		// For all tabs, use full height since filter is now inside tab for table tabs
 		contentView := tableBorderStyle.
-			Width(m.ContentWidth - 4).
+			Width(tabWidth).
 			Height(contentHeight).
 			Render(m.Tabs.View())
 		mainArea = contentView
@@ -123,15 +103,20 @@ func (m Model) View() string {
 		placeholderStyle := lipgloss.NewStyle().
 			Foreground(t.Colors.ForegroundDim).
 			Align(lipgloss.Center, lipgloss.Center).
-			Width(m.ContentWidth - 4).
+			Width(tabWidth).
 			Height(contentHeight - 2)
 
 		placeholder := placeholderStyle.Render("Select a table from the sidebar to open it in a tab\n(Press Enter on a table to open)")
 
 		mainArea = tableBorderStyle.
-			Width(m.ContentWidth - 4).
+			Width(tabWidth).
 			Height(contentHeight).
 			Render(placeholder)
+	}
+
+	if m.Detail.Visible() {
+		detailView := m.Detail.View()
+		mainArea = lipgloss.JoinHorizontal(lipgloss.Top, mainArea, detailView)
 	}
 
 	var middleSection string

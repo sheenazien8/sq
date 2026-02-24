@@ -123,7 +123,7 @@ func (c *QueryHistoryContent) View() string {
 
 	limit := c.visibleLines
 	start := max(c.start, 0)
-	end := min(start + limit, len(c.entries))
+	end := min(start+limit, len(c.entries))
 
 	for i := start; i < end; i++ {
 		e := c.entries[i]
