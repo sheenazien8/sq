@@ -1557,14 +1557,8 @@ func (m Model) updateTabSize() Model {
 	tableWidth := m.ContentWidth - 4
 	contentHeight := m.ContentHeight
 
-	if m.Detail.Visible() {
-		detailW := 40
-		if detailW > m.ContentWidth/3 {
-			detailW = m.ContentWidth / 3
-		}
-		if detailW < 20 {
-			detailW = 20
-		}
+	detailW := m.detailPaneWidth()
+	if detailW > 0 {
 		tableWidth -= detailW
 		m.Detail.SetSize(detailW, contentHeight-2)
 	}
@@ -1575,6 +1569,21 @@ func (m Model) updateTabSize() Model {
 	tableHeight := contentHeight - filterBarHeight - 2
 	m.Tabs.SetSize(tableWidth, tableHeight)
 	return m
+}
+
+// detailPaneWidth returns the width to reserve for the detail pane when visible
+func (m Model) detailPaneWidth() int {
+	if !m.Detail.Visible() {
+		return 0
+	}
+	detailW := 40
+	if detailW > m.ContentWidth/3 {
+		detailW = m.ContentWidth / 3
+	}
+	if detailW < 20 {
+		detailW = 20
+	}
+	return detailW
 }
 
 func (m Model) showAlert(message string) Model {

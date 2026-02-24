@@ -84,15 +84,9 @@ func (m Model) View() string {
 
 	// Show tabs if they exist, otherwise show placeholder
 	tabWidth := m.ContentWidth - 4
-	if m.Detail.Visible() {
-		// Calculate detail pane width, max 40 cols, at least 20 cols
-		detailW := 40
-		if detailW > m.ContentWidth/3 {
-			detailW = m.ContentWidth / 3
-		}
-		if detailW < 20 {
-			detailW = 20
-		}
+	// adjust for detail pane if visible (use same logic as updateTabSize)
+	detailW := m.detailPaneWidth()
+	if detailW > 0 {
 		tabWidth -= detailW
 	}
 
