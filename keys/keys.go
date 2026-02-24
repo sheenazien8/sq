@@ -238,6 +238,10 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("ctrl+y"),
 			key.WithHelp("ctrl+y", "yank query"),
 		),
+		QueryHistory: key.NewBinding(
+			key.WithKeys("H"),
+			key.WithHelp("H", "query history"),
+		),
 		DetailScrollUp: key.NewBinding(
 			key.WithKeys("ctrl+u"),
 			key.WithHelp("ctrl+u", "detail up"),
