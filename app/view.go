@@ -6,22 +6,6 @@ import (
 	"github.com/sheenazien8/sq/ui/theme"
 )
 
-// Helper functions
-func intToStr(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	if n < 0 {
-		return "-" + intToStr(-n)
-	}
-	var digits []byte
-	for n > 0 {
-		digits = append([]byte{byte(n%10) + '0'}, digits...)
-		n /= 10
-	}
-	return string(digits)
-}
-
 // View renders the main application view
 func (m Model) View() string {
 	if m.TerminalWidth == 0 || m.TerminalHeight == 0 {
