@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/sheenazien8/sq/app"
+	"github.com/sheenazien8/sq/config"
 	"github.com/sheenazien8/sq/drivers"
 	"github.com/sheenazien8/sq/internal/version"
 	"github.com/sheenazien8/sq/logger"
@@ -37,6 +39,15 @@ func main() {
 		os.Exit(0)
 	}
 
+	configDir, err := config.ConfigDir()
+	if err == nil {
+		os.MkdirAll(configDir, 0755)
+		logPath := filepath.Join(configDir, "debug.log")
+		if err := logger.SetFile(logPath); err != nil {
+			fmt.Println("Failed to setup logger:", err)
+		}
+	}
+
 	// Handle create connection flag
 	if *createConnFlag {
 		if err := handleCreateConnection(*connDriver, *connName, *connHost, *connPort, *connUser, *connPass, *connDB); err != nil {
@@ -47,13 +58,6 @@ func main() {
 		os.Exit(0)
 	}
 
-	// Setup logger
-	if err := logger.SetFile("debug.log"); err != nil {
-		fmt.Println("Failed to setup logger:", err)
-		os.Exit(1)
-	}
-
-	// Set log level based on DEBUG environment variable
 	if os.Getenv("DEBUG") == "true" {
 		logger.SetLevel(slog.LevelDebug)
 	} else {
@@ -100,9 +104,10 @@ func handleCreateConnection(driver, name, host, port, user, password, database s
 	}
 
 	// Validate driver-specific fields
-	if driver == drivers.DriverTypeSQLite {
+	switch driver {
+	case drivers.DriverTypeSQLite:
 		// SQLite only needs name and file path
-	} else if driver == drivers.DriverTypeMySQL || driver == drivers.DriverTypePostgreSQL {
+	case drivers.DriverTypeMySQL, drivers.DriverTypePostgreSQL:
 		// MySQL and PostgreSQL need user and database
 		if user == "" {
 			return fmt.Errorf("Missing required flag: --user.")
@@ -114,11 +119,6 @@ func handleCreateConnection(driver, name, host, port, user, password, database s
 		return fmt.Errorf("Failed to initialize storage: %w", err)
 	}
 	defer storage.Close()
-
-	// Setup logger (minimal for CLI usage)
-	if err := logger.SetFile("debug.log"); err != nil {
-		return fmt.Errorf("Failed to setup logger: %w", err)
-	}
 
 	// Build connection URL based on driver
 	var url string
