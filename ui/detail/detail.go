@@ -94,8 +94,16 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 		} else if key.Matches(msg, keys.AppKeys.DetailScrollDown) {
             lines := m.calculateLines()
             visibleHeight := m.height - 2
-			logger.Debug("Detail scroll down key pressed", map[string]any{"current_offset": m.offset, "total_lines": len(lines), "height": m.height})
-			if m.offset < len(lines)-visibleHeight {
+            if visibleHeight <= 0 {
+                // Not enough height to scroll; keep offset unchanged.
+                break
+            }
+            maxOffset := len(lines) - visibleHeight
+            if maxOffset < 0 {
+                maxOffset = 0
+            }
+			logger.Debug("Detail scroll down key pressed", map[string]any{"current_offset": m.offset, "total_lines": len(lines), "height": m.height, "max_offset": maxOffset})
+			if m.offset < maxOffset {
 				m.offset++
 			}
 		}
