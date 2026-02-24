@@ -157,25 +157,6 @@ func (m *Model) SetData(columns []table.Column, row table.Row) {
 	}
 }
 
-func truncateOrPad(s string, width int) string {
-	currentWidth := lipgloss.Width(s)
-	if currentWidth > width {
-		runes := []rune(s)
-		truncated := ""
-		w := 0
-		for _, r := range runes {
-			rw := lipgloss.Width(string(r))
-			if w+rw > width-3 {
-				break
-			}
-			truncated += string(r)
-			w += rw
-		}
-		return truncated + "..."
-	}
-	return s + strings.Repeat(" ", width-currentWidth)
-}
-
 // View renders the detail pane
 func (m Model) View() string {
 	if !m.visible {
