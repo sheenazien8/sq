@@ -1,4 +1,13 @@
-# sq
+<pre style="text-align:center">
+  ███████╗ ██████╗
+  ██╔════╝██╔═══██╗
+  ███████╗██║   ██║
+  ╚════██║██║▄▄ ██║
+  ███████║╚██████╔/
+  ╚══════╝ ╚══▀▀═╝
+
+Database client for vim users
+</pre>
 
 A keyboard-first SQL TUI built for VIM users [Bubble Tea](https://github.com/charmbracelet/bubbletea) TUI framework for Go.
 It focuses on speed, clarity, and terminal-native workflows—no mouse,

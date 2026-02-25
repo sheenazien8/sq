@@ -404,13 +404,17 @@ func (m Model) getTreeItems() []TreeItem {
 
 // visibleItems returns the number of items that can be displayed
 func (m Model) visibleItems() int {
-	// Account for title (1 line), separator (1 line), status (1 line), borders (2 lines)
-	// Plus filter bar (1 line) if visible
+	// Account for: logo (6 lines) + tagline (1 line) + separator (1 line)
+	//              + status bar (1 line) + borders (2 lines) = 11
+	// Plus filter input bar (1 line) if visible
+	// Plus filter label (1 line) if filter text is active but input hidden
 	extraLines := 0
 	if m.showFilter {
 		extraLines = 1
+	} else if m.filterText != "" {
+		extraLines = 1
 	}
-	return max(0, m.height-7-extraLines)
+	return max(0, m.height-11-extraLines)
 }
 
 // Init initializes the model
@@ -537,34 +541,57 @@ func (m Model) View() string {
 
 	var lines []string
 
-	// Filter input (if visible)
+	// 3D Block Logo
+	logoLines := []string{
+		"  ███████╗ ██████╗ ",
+		"  ██╔════╝██╔═══██╗",
+		"  ███████╗██║   ██║",
+		"  ╚════██║██║▄▄ ██║",
+		"  ███████║╚██████╔╝",
+		"  ╚══════╝ ╚══▀▀═╝ ",
+	}
+	logoText := strings.Join(logoLines, "\n")
+
+	logoStyle := lipgloss.NewStyle().
+		Foreground(t.Colors.Primary).
+		Bold(true).
+		Align(lipgloss.Center).
+		Width(innerWidth)
+	renderedLogo := logoStyle.Render(logoText)
+	lines = append(lines, renderedLogo)
+
+	// Tagline
+	tagline := lipgloss.NewStyle().
+		Foreground(t.Colors.ForegroundDim).
+		Align(lipgloss.Center).
+		Width(innerWidth).
+		Render("For you vim users")
+	lines = append(lines, tagline)
+
+	// Filter indicator (when filter is active but input hidden)
+	if m.filterText != "" && !m.showFilter {
+		filterLabel := lipgloss.NewStyle().
+			Foreground(t.Colors.Accent).
+			Align(lipgloss.Center).
+			Width(innerWidth).
+			Render("~ " + m.filterText + " ~")
+		lines = append(lines, filterLabel)
+	}
+
+	// Separator
+	separatorStyle := lipgloss.NewStyle().Foreground(t.Colors.BorderUnfocused)
+	lines = append(lines, separatorStyle.Render(strings.Repeat("─", innerWidth)))
+
+	// Filter input (if visible) — below separator, above tree items
 	if m.showFilter {
 		filterStyle := lipgloss.NewStyle().
 			Foreground(t.Colors.Primary).
 			Background(t.Colors.SelectionBg).
 			Padding(0, 1)
-		// Replace newlines to prevent wrapping that breaks UI
 		filterView := strings.ReplaceAll(m.filterInput.View(), "\n", " ")
 		filterLine := filterStyle.Width(innerWidth).Render(filterView)
 		lines = append(lines, filterLine)
 	}
-
-	// Title
-	titleText := " Databases"
-	if m.filterText != "" && !m.showFilter {
-		titleText = " (filtered: " + m.filterText + ")"
-	}
-	title := t.SidebarTitle.
-		Align(lipgloss.Center, lipgloss.Center).
-		Width(innerWidth).
-		Height(3).
-		Render(titleText)
-
-	lines = append(lines, title)
-
-	// Separator
-	separatorStyle := lipgloss.NewStyle().Foreground(t.Colors.BorderUnfocused)
-	lines = append(lines, separatorStyle.Render(strings.Repeat("─", innerWidth)))
 
 	// Tree items
 	treeItems := m.getTreeItems()
@@ -649,9 +676,33 @@ func (m Model) View() string {
 		lines = append(lines, strings.Repeat(" ", innerWidth))
 	}
 
-	// Status bar
+	// Status bar with item count and scroll indicator
+	totalItems := len(treeItems)
+	var statusText string
+	if totalItems == 0 {
+		// Empty state: show 0/0 instead of an impossible index like 1/0
+		statusText = "0/0"
+	} else {
+		// Clamp cursor to valid range before displaying 1-based index
+		currentIndex := m.cursor
+		if currentIndex < 0 {
+			currentIndex = 0
+		} else if currentIndex >= totalItems {
+			currentIndex = totalItems - 1
+		}
+		statusText = intToStr(currentIndex+1) + "/" + intToStr(totalItems)
+	}
+	if totalItems > visibleCount {
+		if m.offset > 0 && endIdx < totalItems {
+			statusText = "↑ " + statusText + " ↓"
+		} else if m.offset > 0 {
+			statusText = "↑ " + statusText
+		} else if endIdx < totalItems {
+			statusText = statusText + " ↓"
+		}
+	}
 	status := t.StatusBar.Width(innerWidth).Align(lipgloss.Right).
-		Render(intToStr(m.cursor+1) + "/" + intToStr(len(treeItems)))
+		Render(statusText)
 	lines = append(lines, status)
 
 	// Join content
