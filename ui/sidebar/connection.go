@@ -677,13 +677,27 @@ func (m Model) View() string {
 	}
 
 	// Status bar with item count and scroll indicator
-	statusText := intToStr(m.cursor+1) + "/" + intToStr(len(treeItems))
-	if len(treeItems) > visibleCount {
-		if m.offset > 0 && endIdx < len(treeItems) {
+	totalItems := len(treeItems)
+	var statusText string
+	if totalItems == 0 {
+		// Empty state: show 0/0 instead of an impossible index like 1/0
+		statusText = "0/0"
+	} else {
+		// Clamp cursor to valid range before displaying 1-based index
+		currentIndex := m.cursor
+		if currentIndex < 0 {
+			currentIndex = 0
+		} else if currentIndex >= totalItems {
+			currentIndex = totalItems - 1
+		}
+		statusText = intToStr(currentIndex+1) + "/" + intToStr(totalItems)
+	}
+	if totalItems > visibleCount {
+		if m.offset > 0 && endIdx < totalItems {
 			statusText = "↑ " + statusText + " ↓"
 		} else if m.offset > 0 {
 			statusText = "↑ " + statusText
-		} else if endIdx < len(treeItems) {
+		} else if endIdx < totalItems {
 			statusText = statusText + " ↓"
 		}
 	}
