@@ -261,6 +261,11 @@ func (m Model) GetVisibleColumns() []Column {
 	return visible
 }
 
+// GetRows returns the current rows displayed in the table
+func (m Model) GetRows() []Row {
+	return m.rows
+}
+
 // GetAllColumns returns all columns (including hidden ones)
 func (m Model) GetAllColumns() []Column {
 	return m.columns

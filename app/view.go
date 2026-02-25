@@ -60,6 +60,10 @@ func (m Model) View() string {
 		return m.QueryHistoryModal.View()
 	}
 
+	if m.ExportModal.Visible() {
+		return m.ExportModal.View()
+	}
+
 	t := theme.Current
 
 	var sidebarView string

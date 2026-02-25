@@ -14,6 +14,7 @@ import (
 	"github.com/sheenazien8/sq/ui/modal-edit-cell"
 	modaleditconnection "github.com/sheenazien8/sq/ui/modal-edit-connection"
 	"github.com/sheenazien8/sq/ui/modal-exit"
+	modalexport "github.com/sheenazien8/sq/ui/modal-export"
 	"github.com/sheenazien8/sq/ui/modal-help"
 	modalqueryhistory "github.com/sheenazien8/sq/ui/modal-query-history"
 	"github.com/sheenazien8/sq/ui/sidebar"
@@ -45,6 +46,7 @@ const (
 	FocusHelpModal
 	// FocusQueryHistoryModal is used when the query history modal is visible
 	FocusQueryHistoryModal
+	FocusExportModal
 )
 
 type Model struct {
@@ -64,8 +66,15 @@ type Model struct {
 	HelpModal             modalhelp.Model
 	ColumnVisibilityModal modal.Model
 	QueryHistoryModal     modalqueryhistory.Model
-	Focus                 Focus
-	previousFocus         Focus
+	ExportModal           modal.Model
+	// pending export state
+	exportPending bool
+	exportPath    string
+	exportFormat  string
+	exportColumns []table.Column
+	exportRows    []table.Row
+	Focus         Focus
+	previousFocus Focus
 
 	allRows     []table.Row
 	columns     []table.Column
@@ -146,6 +155,7 @@ func New() Model {
 	columnVisibilityContent := modalcolumnvisibility.New()
 	columnVisibilityModal := modal.New("Column Visibility", columnVisibilityContent)
 	queryHistoryModal := modalqueryhistory.New()
+	exportModal := modalexport.New("")
 	tabs := tab.New()
 	detailPane := detail.New()
 
@@ -165,6 +175,7 @@ func New() Model {
 		HelpModal:             helpModal,
 		ColumnVisibilityModal: columnVisibilityModal,
 		QueryHistoryModal:     queryHistoryModal,
+		ExportModal:           exportModal,
 		Focus:                 FocusSidebar,
 		previousFocus:         FocusSidebar,
 		dbConnections:         make(map[string]drivers.Driver),

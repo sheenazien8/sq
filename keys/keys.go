@@ -11,6 +11,7 @@ type KeyMap struct {
 	ToggleSidebar key.Binding
 	ToggleDetail  key.Binding
 	ClearFilter   key.Binding
+	FocusPrev     key.Binding
 	FocusNext     key.Binding
 
 	// Navigation
@@ -53,6 +54,7 @@ type KeyMap struct {
 	FormatQuery             key.Binding
 	QueryHistory            key.Binding
 	YankQuery               key.Binding
+	Export                  key.Binding
 
 	// Detail specific
 	DetailScrollUp   key.Binding
@@ -89,11 +91,14 @@ func DefaultKeyMap() KeyMap {
 			key.WithKeys("C"),
 			key.WithHelp("C", "clear filter"),
 		),
+		FocusPrev: key.NewBinding(
+			key.WithKeys("shift+tab"),
+			key.WithHelp("shift+tab", "switch focus prev"),
+		),
 		FocusNext: key.NewBinding(
 			key.WithKeys("tab"),
 			key.WithHelp("tab", "switch focus"),
 		),
-
 		// Navigation
 		Up: key.NewBinding(
 			key.WithKeys("k", "up"),
@@ -178,8 +183,12 @@ func DefaultKeyMap() KeyMap {
 			key.WithHelp("n", "new connection"),
 		),
 		OpenQueryEditor: key.NewBinding(
-			key.WithKeys("e", "E"),
+			key.WithKeys("e"),
 			key.WithHelp("e", "query editor"),
+		),
+		Export: key.NewBinding(
+			key.WithKeys("E"),
+			key.WithHelp("E", "export"),
 		),
 		Confirm: key.NewBinding(
 			key.WithKeys("enter"),
@@ -275,6 +284,7 @@ func UpdateFromConfig(configMap map[string][]string) {
 	apply("toggle_sidebar", &AppKeys.ToggleSidebar)
 	apply("toggle_detail", &AppKeys.ToggleDetail)
 	apply("clear_filter", &AppKeys.ClearFilter)
+	apply("focus_prev", &AppKeys.FocusPrev)
 	apply("focus_next", &AppKeys.FocusNext)
 
 	apply("up", &AppKeys.Up)
@@ -315,6 +325,7 @@ func UpdateFromConfig(configMap map[string][]string) {
 	apply("format_query", &AppKeys.FormatQuery)
 	apply("query_history", &AppKeys.QueryHistory)
 	apply("yank_query", &AppKeys.YankQuery)
+	apply("export", &AppKeys.Export)
 	apply("detail_scroll_up", &AppKeys.DetailScrollUp)
 	apply("detail_scroll_down", &AppKeys.DetailScrollDown)
 }

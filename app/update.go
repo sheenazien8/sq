@@ -1,7 +1,11 @@
 package app
 
 import (
+	"encoding/csv"
+	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,6 +22,7 @@ import (
 	"github.com/sheenazien8/sq/ui/modal"
 	"github.com/sheenazien8/sq/ui/modal-action"
 	modalcolumnvisibility "github.com/sheenazien8/sq/ui/modal-column-visibility"
+	modalexport "github.com/sheenazien8/sq/ui/modal-export"
 	queryeditor "github.com/sheenazien8/sq/ui/query-editor"
 	"github.com/sheenazien8/sq/ui/sidebar"
 	"github.com/sheenazien8/sq/ui/tab"
@@ -75,7 +80,22 @@ func (m Model) handleUpdate(msg tea.Msg) (Model, tea.Cmd) {
 	var cmd tea.Cmd
 	var cmds []tea.Cmd
 
+	type exportCompletedMsg struct {
+		path string
+		err  error
+	}
+
 	switch msg := msg.(type) {
+	case exportCompletedMsg:
+		if msg.err != nil {
+			logger.Error("Export failed", map[string]any{"error": msg.err.Error(), "path": msg.path})
+			m = m.showAlertWithStyle("Error", "Export failed: "+msg.err.Error(), true)
+		} else {
+			logger.Info("Export completed", map[string]any{"path": msg.path})
+			m = m.showAlertWithStyle("Export Succeed", "Exported to: "+msg.path, false)
+		}
+		m.exportPending = false
+		return m, nil
 
 	case sidebar.ConnectionSelectedMsg:
 		logger.Debug("Connection selected", map[string]any{
@@ -434,6 +454,7 @@ func (m Model) handleUpdate(msg tea.Msg) (Model, tea.Cmd) {
 		m.HelpModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 		m.ColumnVisibilityModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 		m.QueryHistoryModal.SetSize(m.TerminalWidth, m.TerminalHeight)
+		m.ExportModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 
 	case tea.KeyMsg:
 		if m.AlertModal.Visible() {
@@ -824,6 +845,94 @@ func (m Model) handleUpdate(msg tea.Msg) (Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 		}
 
+		if m.ExportModal.Visible() {
+			m.ExportModal, cmd = m.ExportModal.Update(msg)
+			cmds = append(cmds, cmd)
+
+			if !m.ExportModal.Visible() {
+				if m.ExportModal.Result() == modal.ResultSubmit {
+					if content, ok := m.ExportModal.Content.(*modalexport.ExportContent); ok {
+						path := content.GetPath()
+						format := content.GetFormat()
+
+						rows, cols, _ := m.Tabs.GetActiveTabData()
+
+						exportCmd := func() tea.Msg {
+							var err error
+							p := path
+							if dir := filepath.Dir(p); dir != "." && dir != "" {
+								_ = os.MkdirAll(dir, 0o755)
+							}
+							if format == "csv" {
+								f, e := os.Create(p)
+								if e != nil {
+									err = e
+								} else {
+									w := csv.NewWriter(f)
+									var header []string
+									for _, c := range cols {
+										header = append(header, c.Title)
+									}
+									_ = w.Write(header)
+									for _, r := range rows {
+										_ = w.Write(r)
+									}
+									w.Flush()
+									e = w.Error()
+									_ = f.Close()
+									if e != nil {
+										err = e
+									}
+								}
+							} else {
+								arr := make([]map[string]string, len(rows))
+								for i, r := range rows {
+									obj := make(map[string]string)
+									for j, c := range cols {
+										val := ""
+										if j < len(r) {
+											val = r[j]
+										}
+										obj[c.Title] = val
+									}
+									arr[i] = obj
+								}
+								b, e := json.MarshalIndent(arr, "", "  ")
+								if e != nil {
+									err = e
+								} else {
+									e = os.WriteFile(p, b, 0o644)
+									if e != nil {
+										err = e
+									}
+								}
+							}
+							return exportCompletedMsg{path: p, err: err}
+						}
+						m.exportPending = true
+						cmds = append(cmds, func() tea.Msg {
+							return exportCmd()
+						})
+					}
+				}
+
+				m.Focus = m.previousFocus
+				switch m.Focus {
+				case FocusSidebar:
+					m.Sidebar.SetFocused(true)
+					m.Tabs.SetFocused(false)
+				case FocusMain:
+					m.Sidebar.SetFocused(false)
+					m.Tabs.SetFocused(true)
+				default:
+					m.Sidebar.SetFocused(false)
+					m.Tabs.SetFocused(false)
+				}
+				m = m.updateFooter()
+			}
+			return m, tea.Batch(cmds...)
+		}
+
 		// If query editor is active, pass most keys directly to it
 		// Only intercept specific control keys for app-level navigation
 		if m.Focus == FocusMain && m.Tabs.HasTabs() && m.Tabs.GetActiveTabType() == tab.TabTypeQuery {
@@ -902,6 +1011,23 @@ func (m Model) handleUpdate(msg tea.Msg) (Model, tea.Cmd) {
 						m.ColumnVisibilityModal.SetSize(m.TerminalWidth, m.TerminalHeight)
 					}
 				}
+			}
+			return m, nil
+
+		case key.Matches(msg, keys.AppKeys.Export):
+			if m.Focus == FocusMain && m.Tabs.HasTabs() {
+				tabName := m.Tabs.GetActiveTabName()
+				filename := strings.ReplaceAll(tabName, ".", "_")
+				filename = strings.ReplaceAll(filename, " ", "_")
+				defaultPath := filename + ".csv"
+
+				content := modalexport.NewExportContent(defaultPath)
+				m.ExportModal.SetContent(content)
+				m.ExportModal.SetSize(m.TerminalWidth, m.TerminalHeight)
+				m.ExportModal.Show()
+				m.previousFocus = m.Focus
+				m.Focus = FocusExportModal
+				m = m.updateFooter()
 			}
 			return m, nil
 
@@ -1270,6 +1396,8 @@ func (m Model) handleUpdate(msg tea.Msg) (Model, tea.Cmd) {
 				cmds = append(cmds, cmd)
 			}
 		}
+
+		// Export handled in tea.KeyMsg block below
 	}
 
 	return m, tea.Batch(cmds...)
@@ -1576,22 +1704,23 @@ func (m Model) detailPaneWidth() int {
 	if !m.Detail.Visible() {
 		return 0
 	}
-	detailW := 40
-	if detailW > m.ContentWidth/3 {
-		detailW = m.ContentWidth / 3
-	}
-	if detailW < 20 {
-		detailW = 20
-	}
+	detailW := max(min(40, m.ContentWidth/3), 20)
 	return detailW
 }
 
 func (m Model) showAlert(message string) Model {
+	return m.showAlertWithStyle("", message, true)
+}
+
+func (m Model) showAlertWithStyle(title, message string, isError bool) Model {
 	if content, ok := m.AlertModal.Content.(*modal.AlertContent); ok {
-		content.SetMessage(message)
+		content.SetMessageWithStyle(message, isError)
 		m.AlertModal.SetContent(content)
 	} else {
-		m.AlertModal.SetContent(modal.NewAlertContent(message))
+		m.AlertModal.SetContent(modal.NewAlertContentWithStyle(message, isError))
+	}
+	if title != "" {
+		m.AlertModal.SetTitle(title)
 	}
 	m.previousFocus = m.Focus
 	m.AlertModal.Show()

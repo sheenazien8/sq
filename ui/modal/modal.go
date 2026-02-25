@@ -96,6 +96,10 @@ func (m *Model) SetContent(content Content) {
 	}
 }
 
+func (m *Model) SetTitle(title string) {
+    m.Title = title
+}
+
 // Update handles input
 func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 	if !m.visible || m.Content == nil {
@@ -295,6 +299,7 @@ type AlertContent struct {
 	result   Result
 	closed   bool
 	width    int
+	isError  bool
 }
 
 func NewAlertContent(message string) *AlertContent {
@@ -303,6 +308,17 @@ func NewAlertContent(message string) *AlertContent {
 		selected: 1,
 		result:   ResultNone,
 		closed:   false,
+		isError:  true,
+	}
+}
+
+func NewAlertContentWithStyle(message string, isError bool) *AlertContent {
+	return &AlertContent{
+		Message:  message,
+		selected: 1,
+		result:   ResultNone,
+		closed:   false,
+		isError:  isError,
 	}
 }
 
@@ -311,6 +327,15 @@ func (c *AlertContent) SetMessage(message string) {
 	c.selected = 1
 	c.copied = false
 	c.copyErr = ""
+	c.isError = true
+}
+
+func (c *AlertContent) SetMessageWithStyle(message string, isError bool) {
+	c.Message = message
+	c.selected = 1
+	c.copied = false
+	c.copyErr = ""
+	c.isError = isError
 }
 
 func (c *AlertContent) Update(msg tea.Msg) (Content, tea.Cmd) {
@@ -319,7 +344,7 @@ func (c *AlertContent) Update(msg tea.Msg) (Content, tea.Cmd) {
 		switch {
 		case key.Matches(msg, keys.AppKeys.Left), key.Matches(msg, keys.AppKeys.FocusNext):
 			c.selected = 0
-		case key.Matches(msg, keys.AppKeys.Right), msg.String() == "shift+tab":
+		case key.Matches(msg, keys.AppKeys.Right), key.Matches(msg, keys.AppKeys.FocusPrev):
 			c.selected = 1
 		case msg.String() == "c", msg.String() == "y":
 			if err := clipboard.WriteAll(c.Message); err != nil {
@@ -353,8 +378,12 @@ func (c *AlertContent) Update(msg tea.Msg) (Content, tea.Cmd) {
 func (c *AlertContent) View() string {
 	t := theme.Current
 
+	messageColor := t.Colors.Error
+	if !c.isError {
+		messageColor = t.Colors.Success
+	}
 	messageStyle := lipgloss.NewStyle().
-		Foreground(t.Colors.Error).
+		Foreground(messageColor).
 		Align(lipgloss.Center).
 		Padding(1, 0)
 
@@ -377,6 +406,9 @@ func (c *AlertContent) View() string {
 		copyButton = inactiveButtonStyle.Render(" Copy ")
 		okButton = activeButtonStyle.Render(" OK ")
 	}
+    if !c.isError {
+        copyButton = ""
+    }
 	buttonRow := lipgloss.JoinHorizontal(lipgloss.Center, copyButton, "   ", okButton)
 	buttonRowCentered := lipgloss.NewStyle().Width(40).Align(lipgloss.Center).Render(buttonRow)
 
